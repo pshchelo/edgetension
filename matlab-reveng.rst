@@ -17,17 +17,17 @@ Matlab files
 ------------
 Here is my initial guess of Matlab files present:
 
-- affiche.m - displays sets of R**2*ln(r) lines for user to visually determine 
+- affiche.m - displays sets of R**2 * ln(r) lines for user to visually determine 
   the linear regime boundaries (english: display)
-- chargement.m - loads data from txt file user creates from MS Excel file
+- chargement.m - loads data from txt file user creates from MS Excel file;
   aslo stores names of corresponding image files (english: load)
 - fit_lineaire.m - make linear fit of data (self-explanatory)
 - pentes.m - makes a lot of linear fits and extracts tension value from them 
   (english: slopes)
 - trous.m - performs image analysis to find pore radius (english: holes)
 
-Pore finding procedure
-----------------------
+Pore finding procedure (MATLAB)
+-------------------------------
 This is the insight on workings of algorythm in trous.m in respect to a single 
 frame of single image file
 
@@ -38,12 +38,28 @@ always goes through the pore with the pore located on the right side
 # Find center of the image
 # Blacken the left half of the image - that leaves either two separated 
   arc-like clusters or a single big hemi-circular one.
-# Find indices (i.e. coordinates) of all non-zero elements
-# for all nonzero elements find an angle between the element, center of image 
-  and horizontal right (+) direction
+# Find the innermost intersection points between vesicle and vertical midsection
+  (these most likely be on those squares put onto images as described in the manual).
+# Find the continuous clusters these innermost points belong to. Continuous means 
+  that every point of the cluster has at least one nearest neighbour 
+  in any of 8 directions. *This is done by brute-force matlab code 
+  and is suspected to be the performance bottleneck.*
+# Find indices (i.e. coordinates) of all non-zero elements of the clusters found
+# Find the (signed) angles between the center of image, 
+  positive x-direction (right) and the nonzero points of the clusters
 # for nonzero elements in upper-right quadrant take element and its position 
   with the minimal angle
 # for nonzero elements in lower-right quadrant take element and its position 
   with the maximal angle
-# find distance between these two points. if it is (one or zero?) - 
+# find distance between these two points. if it is one or smaller - 
   there is no pore, otherwise it is a pore diameter
+
+Pore finding procedure (Python)
+-------------------------------
+Technically using the same algorithm as MATLAB procedure, major performance 
+improvement comes from using ``scipy.ndimage.label()`` for cluster analysis 
+instead of direct brute-force looping.
+
+Also now it is possible to count the number of frames in the TIFF file 
+programmaticaly (although at the cost of some relatively short time), 
+so this parameter is no longer needed.
