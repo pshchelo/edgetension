@@ -5,10 +5,13 @@ Created on Thu Dec 15 00:26:39 2011
 @author: Pavlo Shchelokovskyy
 """
 from __future__ import division
+import os
 
 import numpy as np
 from scipy.misc import fromimage
 from scipy.ndimage import label
+
+import load
  
 def pore_edges(imagestack, nofimages, njump=1):
     """Computes pore sizes from binary vesicle images
@@ -80,3 +83,18 @@ def pore_radii(edgestop, edgesbottom):
     rpores = np.where(nopore, np.zeros_like(dist), dist) / 2
 
     return rpores
+    
+def main(filename, n):
+    tif, nofimg = load.load_imagestack(filename)
+    framenos, edgestop, edgesbottom = pore_edges(tif, nofimg, njump=n)
+    rpores = pore_radii(edgestop, edgesbottom)
+    
+    name, ext = os.path.splitext(filename)
+    nameout = name+'_%%%i.txt'%n
+    out = np.column_stack((rpores, edgestop, edgesbottom, framenos))
+    np.savetxt(nameout, out, fmt='%.7e')
+    
+if __name__ == '__main__':
+    import timeit
+    print timeit.repeat("main('matlab/processing/binaries/boston_1.tif', 1)", 
+                        "from __main__ import main", repeat=10, number=1)
