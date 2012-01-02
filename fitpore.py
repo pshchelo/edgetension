@@ -14,16 +14,18 @@ from scipy.stats import linregress
 parser = argparse.ArgumentParser(description='Get pore tension in 2 steps.',
         epilog="""First run with only a filename as input and remember the boundaries of the linear stage.
         Then run again supplying all arguments to get the linear region fitted and pore tension displayed.""")
-parser.add_argument('filename', help='Name of the input file with pore radii and frame numbers')
-parser.add_argument('-s', type=int, default=0, help='Start of the linear region')
-parser.add_argument('-e', type=int, default=0, help='End of the linear region')
+parser.add_argument('filename', help='Name of the input text file with pore radii and frame numbers')
+parser.add_argument('-s', type=int, default=0, help='Start of the linear region (frame number)')
+parser.add_argument('-e', type=int, default=0, help='End of the linear region (frame number)')
 parser.add_argument('-r', type=float, help='Initial radius of the vesicle in microns.')
 parser.add_argument('-f', type=float, help='Speed of image acquisition in frames per second')
 parser.add_argument('-v', type=float, default=1.0e-3, 
-                    help='Viscosity of the bulk solution in Pa*s (defaults to water)')
+                    help='Viscosity of the bulk solution in Pa*s (defaults 1e-3 Pa*s for water)')
 
+if len(sys.argv)==1:
+        parser.print_help()
+        sys.exit(1)
 args = parser.parse_args()
-print args
 
 radius, frame = np.loadtxt(args.filename, unpack=1, usecols=(0,5))
 lnr = np.log(radius)
@@ -73,11 +75,12 @@ else:
     plt.xlabel('frame number')
     plt.ylabel('$\\ln (r_p)$')
     
-    #-1.5e-12 = -3/2 * (1.e-6 m)^2 since args.r is in microns
-    gamma = -1.5e-12 * np.pi * args.v * args.r*args.r * args.f * a
-    gammastd = -1.5e-12 * np.pi * args.v * args.r*args.r * args.f *std
+    modelgamma = lambda x: -1.5 * np.pi * args.v * args.r*args.r * args.f *x
+    gamma =  modelgamma(a)
+    gammastd = np.abs(modelgamma(std))
     
-    plt.title('$\\gamma$ = %e $\\pm$ %e, from %i to %i'%(gamma, gammastd, lim1, lim2))
+    #since R is in micrometers and there is R**2, gamma is in picoNewtons
+    plt.title('$\\gamma$ = %f $\\pm$ %f pN, from %i to %i'%(gamma, gammastd, lim1, lim2))
     plt.show()
     
 

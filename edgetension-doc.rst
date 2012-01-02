@@ -4,13 +4,13 @@ Pore Tension Calculation
 What's this about
 -----------------
 
-The initial procedure for calculating vesicle pre edge tension from electroporation 
+The initial procedure for calculating vesicle pore edge tension from electroporation 
 images was written by Thomas Portet while his stay in Max-Planck-Institute of 
 Colloids and Inerfaces between April and June 2009.
 
 Initial procedure uses a mix of ImageJ and MATLAB to do the job. 
-While the first one being FLOSS is acceptable, Matlab is an expensive 
-proprietary tool, and I had re-implemented the Matlab part in 
+While the first one being FLOSS is acceptable, MATLAB is an expensive 
+proprietary tool, and I had re-implemented the MATLAB part in 
 free and cross-platform Python plus some packages.
 
 
@@ -21,10 +21,10 @@ Image acquisition and storage
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 *This section is copy-pasted with minor editions from T.Portet's manual.*
 
-Images must be transfered from the camera in tiff format. 
+Images must be transferred from the camera in tiff format. 
 Acquisition must be performed with a linear timescale. Images relative to an 
 experiment (i.e. to the application of one pulse on one vesicle) must be saved 
-as an image stack in tiff fomat. The user must ensure that the cathode-facing 
+as an image stack in tiff format. The user must ensure that the cathode-facing 
 hemisphere of the vesicle is situated on the right-hand side of the images. 
 Converting images to a stack and rotating them if necessary can be performed with ImageJ.
 
@@ -41,7 +41,7 @@ image.
 As a first step in this membrane detection stage, perform an image background 
 correction by using the background subtraction rolling-ball algorithm 
 [Sternberg(1983)], with ball radius set to 50 pixels4 (Process, 
-Substract Background, Sliding Paraboloid, 50 pixels). A ball radius of 
+Subtract Background, Sliding Paraboloid, 50 pixels). A ball radius of 
 50 pixels gave good results with processed images, other values can also 
 be tried if problems. Then locate the membrane position by using a common Sobel 
 edge detector to highlight sharp changes in intensity (Process, Find Edges). 
@@ -68,7 +68,7 @@ to the whole stack.
 User manual for Python implementation
 -------------------------------------
 
-Prerequisites (vesrsion tested with is in parentheses):
+Prerequisites (version tested with is in parentheses):
 
 - Python (2.7.2)
 - NumPy (1.6.1)
@@ -95,6 +95,10 @@ pores.py
 	  -h, --help   show this help message and exit
 	  --skip SKIP  Analyse only every SKIPth frame (default is every frame)
 	  --test TEST  Run the procedure TEST times and report the minimal of them
+
+	Outputs TSV text file named imagename_skipXXX.txt, with 6 columns: pore radius
+	in pixels, 4 columns for x and y coordinates of pore edges, corresponding
+	frame number.
   
 fitpore.py
 ~~~~~~~~~~
@@ -110,11 +114,11 @@ fitpore.py
 
 	optional arguments:
 	  -h, --help  show this help message and exit
-	  -s S        Start of the linear region
-	  -e E        End of the linear region
+	  -s S        Start of the linear region (frame number)
+	  -e E        End of the linear region (frame number)
 	  -r R        Initial radius of the vesicle in microns.
 	  -f F        Speed of image acquisition in frames per second
-	  -v V        Viscosity of the bulk solution in Pa*s (defaults to water)
+	  -v V        Viscosity of the bulk solution in Pa*s (defaults 1e-3 Pa*s for water)
 
 	First run with only a filename as input and remember the boundaries of the
 	linear stage. Then run again supplying all arguments to get the linear region
@@ -127,7 +131,7 @@ Technical details
 Pore finding procedure
 ~~~~~~~~~~~~~~~~~~~~~~
 
-The implementation in Python very closely folows to the MATLAB one, except 
+The implementation in Python very closely follows to the MATLAB one, except 
 using a fast library for cluster detection instead of brute-force high-level 
 code in MATLAB. Result is **33-fold increase in speed**, while the difference between 
 two implementations for all but few frames of 5 test images supplied with 
