@@ -6,6 +6,20 @@ Created on Thu Dec 15 00:26:39 2011
 
 comments machine translated from French and not critically analyzed
 are marked with FR:
+
+These are the steps for a single frame from a single image:    
+# Find center of the image
+# Blacken the left half of the image - that leaves either two separated 
+  arc-like clusters or a single big hemi-circular one.
+# Find indices (i.e. coordinates) of all non-zero elements
+# for all nonzero elements find an angle between the element, center of image 
+  and horizontal right (+) direction
+# for nonzero elements in upper-right quadrant take element and its position 
+  with the minimal angle
+# for nonzero elements in lower-right quadrant take element and its position 
+  with the maximal angle
+# find distance between these two points. if it is (one or zero?) - 
+  there is no pore, otherwise it is a pore diameter
 """
 
 import numpy as np
@@ -52,20 +66,21 @@ argin:
             #reading the image
             #TODO: read one next image from multipage TIFF
             image = sp.misc.imread(names[imanip]) #temp hack just to define image
-            #TODO: here it looks like expanding the image with 2-pixel black borders in all 4 sides
+            #TODO: here it looks like expanding the image with 1 pixel black borders in all 4 sides
+            # probably for the case of very tight cropping to ensure the padding
             
-            #get image size and find the center
+            #get image size and find the approximate center
             nl, nc = image.shape()
             xc = floor(nl/2)
             yc = floor(nc/2)
             
             #FR:remove the lower part of the image
             im = image
-            #? im[:,:yc-1] = 0
+            im[:,:yc-1] = 0
+            #apparently this removes left part
             
-            #FR:one landmark or a point there
-            #? [x,y]=find(im)
-            #TODO: what does Matlab "find" do?
+            #finds inices of all nonzero elements
+            x,y = np.nonzero(im)
             
             #some debug plotting here
             pass
