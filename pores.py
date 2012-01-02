@@ -23,10 +23,19 @@ These are the steps for a single frame from a single image:
 """
 
 import numpy as np
-import scipy as sp
 
 from load import load
 
+def find_pore_radius(img):
+    """Finds a vesicle pore edges in a binary image
+
+The binary image of the porated vesicle has to be rotated and centered such as 
+that the pore is always to the right and the horizontal midsection of the image 
+always goes through the pore if ther is one.
+    
+"""
+    
+    
 def pores(njump=100):
     """Computes pore sizes from binary vesicle images
 
@@ -36,7 +45,9 @@ argin:
 
 """
     #load parameters
-    names,nslices,Tacq,pixel_size,numero_manip,R,td,tf = load()
+#==============================================================================
+#     names,nslices,Tacq,pixel_size,numero_manip,R,td,tf = load()
+#==============================================================================
     #names - list of names of multipage TIFFs
     #nslices - corresponding number of images in each of multipage TIFFs
     #Tacq - timestep between frames (microsec)
