@@ -6,13 +6,30 @@ Created on Thu Dec 15 00:26:39 2011
 """
 from __future__ import division
 import os
-
+    
 import numpy as np
 from scipy.misc import fromimage
 from scipy.ndimage import label
 
-import load
- 
+from PIL import Image
+
+def count_tiff_frames(tiffimage):
+    """Counts frames in a multipage TIFF file"""
+    count = 0
+    while True:
+        try:
+            tiffimage.seek(count)
+        except EOFError:
+            return count
+        else:
+            count += 1
+
+def load_imagestack(filename):
+    """Loads images from multipage TIFF"""
+    tif = Image.open(filename)
+    size = count_tiff_frames(tif)
+    return tif, size
+    
 def pore_edges(imagestack, nofimages, njump=1):
     """Computes pore sizes from binary vesicle images
 
@@ -23,7 +40,7 @@ Input:
           meaning that pore size is computed for slices 1, 101, 201, 301...)
 
 """
-    framenos = range(0, nofimages, njump)    
+    framenos = np.arange(0, nofimages, njump)
     edgestop = np.empty((len(framenos),2))
     edgesbottom = np.empty_like(edgestop)
 
@@ -66,9 +83,8 @@ Input:
         ybottom, xbottom = np.nonzero(bottomlabeled == innerbottomlabel)
         anglebottom = np.arctan2(ybottom, xbottom)
         minbottom = np.argmin(anglebottom)
-        edgesbottom[i,:] = ybottom[minbottom]+centery, xbottom[minbottom]+centerx
-    
-    return framenos, edgestop, edgesbottom
+        edgesbottom[i,:] = ybottom[minbottom]+centery, xbottom[minbottom]+centerx 
+    return framenos+1, edgestop, edgesbottom
     
 def pore_radii(edgestop, edgesbottom):
     """Computes radii of pore given its edges"""
@@ -84,17 +100,22 @@ def pore_radii(edgestop, edgesbottom):
 
     return rpores
     
-def main(filename, n):
-    tif, nofimg = load.load_imagestack(filename)
-    framenos, edgestop, edgesbottom = pore_edges(tif, nofimg, njump=n)
+def process_image(filename, nskip):
+    """Load image, process it and save results"""
+    tif, nofimg = load_imagestack(filename)
+    framenos, edgestop, edgesbottom = pore_edges(tif, nofimg, njump=nskip)
     rpores = pore_radii(edgestop, edgesbottom)
     
     name, ext = os.path.splitext(filename)
-    nameout = name+'_%%%i.txt'%n
+    nameout = name+'_skip%i.txt'%nskip
     out = np.column_stack((rpores, edgestop, edgesbottom, framenos))
     np.savetxt(nameout, out, fmt='%.7e')
     
 if __name__ == '__main__':
-    import timeit
-    print timeit.repeat("main('matlab/processing/binaries/boston_1.tif', 1)", 
-                        "from __main__ import main", repeat=10, number=1)
+    import argparse
+    parser = argparse.ArgumentParser(description = 'Extract pore positions and radii.')
+    parser.add_argument('filename', help="Name of the multipage b/w tiff file")
+    parser.add_argument('--skip', default=1, type=int, help='Analyse only every SKIPth frame')
+    args = parser.parse_args()
+    
+    process_image(args.filename, args.skip)

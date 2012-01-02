@@ -21,7 +21,7 @@ Here is my initial guess of Matlab files present:
 - chargement.m - loads data from txt file user creates from MS Excel file;
   aslo stores names of corresponding image files (english: load)
 - fit_lineaire.m - make linear fit of data (self-explanatory)
-- pentes.m - makes a lot of linear fits and extracts tension value from them 
+- pentes.m - makes series of linear fits and extracts tension values from them 
   (english: slopes)
 - trous.m - performs image analysis to find pore radius (english: holes)
 
