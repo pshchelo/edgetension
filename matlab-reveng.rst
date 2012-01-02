@@ -67,17 +67,13 @@ Performance Comparison
 - Test system: Athlon X2 5050e 2x2.6GHz, 4GB RAM, Windows 7 Ultimate SP1 64-bit
 - Task: Load and analyze 'boston_1.tif' (73x63px, 8 bpp greyscale, 4001 frames), 
   output the text file with frame numbers, pore radii and edges coordinates.
-- Notes: Software runs from SSD, scripts and data files are loaded from HDD, 
-  output is saved to the same HDD. System use is sought to be minimized during 
-  run. Values are minimal from 10 consequtive runs.
+- Notes: Values are minimal from 10 consequtive runs. Full results significantly 
+  differ in only 5 from 4000 points, with difference on the order of 0.5 pixels.
 
-*MATLAB 7.12.0 (R2011a) 64-bit:* 220.008797 seconds for 4000 frames (actually one less than there is in this TIF)
+*MATLAB 7.12.0 (R2011a) 64-bit:*
+220.008797 seconds for 4000 frames (actually one less than there is in this TIF)
 
-*Python 2.7.2 + Numpy 1.6.1 + ScipPy 0.10 + PIL 1.1.7 (all 64-bit):* 6.29894776 seconds for all 4001 frames
+*Python 2.7.2 + Numpy 1.6.1 + ScipPy 0.10 + PIL 1.1.7 (all 64-bit):*
+6.54798512 seconds for all 4001 frames
 
-Implementation in **Python is 35 time faster than MATLAB** one!
-And I suspect that in its current brute-force form MATLAB scales *at least
-quadratically* with image size.
-
-Full results significantly differ in only 7 points,
-and in 5 of these the difference is below 1 pixel.
+Implementation in **Python is 33 times faster than MATLAB** one!
