@@ -111,7 +111,7 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description = 'Extract pore positions and radii.')
     parser.add_argument('filename', help="Name of the multipage b/w tiff file")
-    parser.add_argument('--skip', default=1, type=int, help='Analyse only every SKIPth frame')
+    parser.add_argument('--skip', default=1, type=int, help='Analyse only every SKIPth frame (default is every frame)')
     parser.add_argument('--test', type=int, default=0, help='Run the procedure TEST times and report the minimal of them')
     args = parser.parse_args()
     
