@@ -6,6 +6,7 @@ Created on Sun Dec 25 15:15:39 2011
 """
 
 import wx
+from wx.lib.agw import floatspin as FS
 
 import matplotlib as mplt
 mplt.use('WXAgg', warn=False)
@@ -124,7 +125,7 @@ class TensionsFrame(wx.Frame):
 
         flexsz = wx.FlexGridSizer(cols=2, vgap=5, hgap=5)
         
-        labelskip = wx.StaticText(self.paramspanel, -1, 'Skip')
+        labelskip = wx.StaticText(self.paramspanel, -1, 'Take every (frame)')
         self.skipspin = wx.SpinCtrl(self.paramspanel, -1, '1', min=1, max=dim)
         self.Bind(wx.EVT_SPINCTRL, self.OnSkip, self.skipspin)
         flexsz.Add(labelskip, 0, wx.GROW|wx.ALIGN_RIGHT|wx.ALIGN_CENTER_VERTICAL)
@@ -136,22 +137,27 @@ class TensionsFrame(wx.Frame):
         flexsz.Add(labelzoom, 0, wx.GROW|wx.ALIGN_RIGHT|wx.ALIGN_CENTER_VERTICAL)
         flexsz.Add(self.zoomcb, 1, wx.GROW)
 
-#TODO: change all below to agw.floatspin.FloatSpin
-        labelradius = wx.StaticText(self.paramspanel, -1, 'Radius')
-        self.radiusspin = wx.SpinCtrl(self.paramspanel, -1, '1', min=0, max=1000)
-        self.Bind(wx.EVT_SPINCTRL, self.Draw, self.radiusspin)
+        labelradius = wx.StaticText(self.paramspanel, -1, 'Radius (um)')
+        self.radiusspin = FS.FloatSpin(self.paramspanel, -1, 
+                                       value = 10., min_val=0, max_val=200, 
+                                       increment=1, digits=3)
+        self.Bind(FS.EVT_FLOATSPIN, self.Draw, self.radiusspin)
         flexsz.Add(labelradius, 0, wx.GROW|wx.ALIGN_RIGHT|wx.ALIGN_CENTER_VERTICAL)
         flexsz.Add(self.radiusspin, 1, wx.GROW)
 
-        labelfps = wx.StaticText(self.paramspanel, -1, 'FPS')
-        self.fpsspin = wx.SpinCtrl(self.paramspanel, -1, '1', min=0, max=50000 )
-        self.Bind(wx.EVT_SPINCTRL, self.Draw, self.fpsspin)
+        labelfps = wx.StaticText(self.paramspanel, -1, 'Speed (fps)')
+        self.fpsspin = FS.FloatSpin(self.paramspanel, -1, 
+                                    value=1000., min_val=0, max_val=50000, 
+                                    increment=1000, digits=3)
+        self.Bind(FS.EVT_FLOATSPIN, self.Draw, self.fpsspin)
         flexsz.Add(labelfps, 0, wx.GROW|wx.ALIGN_RIGHT|wx.ALIGN_CENTER_VERTICAL)
         flexsz.Add(self.fpsspin, 1, wx.GROW)
 
-        labelvisc = wx.StaticText(self.paramspanel, -1, 'Viscosity')
-        self.viscspin = wx.SpinCtrl(self.paramspanel, -1, '1', min=0, max=1000)
-        self.Bind(wx.EVT_SPINCTRL, self.Draw, self.viscspin)
+        labelvisc = wx.StaticText(self.paramspanel, -1, 'Viscosity (mPa*s)')
+        self.viscspin = FS.FloatSpin(self.paramspanel, -1, 
+                                     value=1.0, min_val=0, max_val=2000, 
+                                     increment=0.01, digits=3)
+        self.Bind(FS.EVT_FLOATSPIN, self.Draw, self.viscspin)
         flexsz.Add(labelvisc, 0, wx.GROW|wx.ALIGN_RIGHT|wx.ALIGN_CENTER_VERTICAL)
         flexsz.Add(self.viscspin, 1, wx.GROW)
 
@@ -163,7 +169,7 @@ class TensionsFrame(wx.Frame):
         self.lowlabel.SetLabel('%i'%self.slider.GetLow())
         self.highlabel.SetLabel('%i'%self.slider.GetHigh())
         self.Draw(evt)
-        evt.Skip()
+#        evt.Skip()
 
     def OnSaveTxt(self, evt):
         savedlg = wx.FileDialog(self, 'Save data', self.GetParent().folder,
@@ -195,6 +201,7 @@ class TensionsFrame(wx.Frame):
             self.slider.SetHigh(maxframe)
             self.slider.SetMin(minframe)
             self.slider.SetLow(minframe)
+            self.skipspin.SetRange(1, self.data.shape[1])
             self.OnSlide(evt)
         except Exception, e:
             self.OnError(str(e))
@@ -235,15 +242,15 @@ class TensionsFrame(wx.Frame):
         a, b, corrr, p, stderr = linregress(x, y)
         self.fitplot.set_data(x, a*x+b)
         
-        v = self.viscspin.GetValue()
-        r = self.radiusspin.GetValue()
-        f = self.fpsspin.GetValue()
+        v = self.viscspin.GetValue() / 1000 #since input value is in mPa*s
+        r = self.radiusspin.GetValue() #in 1/s
+        f = self.fpsspin.GetValue() # in micrometers
         
         modelgamma = lambda x: -1.5 * np.pi * v * r*r * f * x
         gamma =  modelgamma(a)
         gammastderr = np.abs(modelgamma(stderr))
         
-        #since R is in micrometers and there is R**2, gamma is in picoNewtons
+        #since r is in micrometers and there is r**2, gamma is in picoNewtons
         title = '$\\gamma$ = %f $\\pm$ %f pN, from %i to %i'%(gamma, 
                                                         gammastderr, low, high)
 
