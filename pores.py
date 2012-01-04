@@ -96,16 +96,15 @@ Input:
                 edgesbottom[i,:] = ybottom[maxbottom], xbottom[maxbottom]+centerx 
                 
     poreradii = np.sqrt(np.sum((edgesbottom-edgestop)**2, axis=1)) / 2
-    return framenos+1, edgestop, edgesbottom, poreradii   
+    return np.column_stack((poreradii, edgestop, edgesbottom, framenos+1)).T
     
 def process_image(filename, nskip):
     """Load image, process it and save results"""
     tif, nofimg = load_imagestack(filename)
-    framenos, edgestop, edgesbottom, rpores = pores(tif, nofimg, njump=nskip)
+    data = pores(tif, nofimg, njump=nskip)
     name, ext = os.path.splitext(filename)
     nameout = name+'_skip%i.txt'%nskip
-    out = np.column_stack((rpores, edgestop, edgesbottom, framenos))
-    np.savetxt(nameout, out, fmt='%.7e')
+    np.savetxt(nameout, data.T, fmt='%.7e')
     
 if __name__ == '__main__':
     import sys

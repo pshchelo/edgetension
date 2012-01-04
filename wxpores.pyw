@@ -4,6 +4,7 @@ Created on Sun Dec 25 15:15:39 2011
 
 @author: family
 """
+from __future__ import division
 
 import wx
 from wx.lib.agw import floatspin as FS
@@ -27,6 +28,7 @@ class TensionsFrame(wx.Frame):
 
         self.data = np.zeros((6,1))
         self.image = None
+        self.nofimg = 0
         
         self.panel = wx.Panel(self, -1)
 
@@ -74,7 +76,7 @@ class TensionsFrame(wx.Frame):
         if dim == 1:
             dim = 2
         self.slider = widgets.DoubleSlider(self.panel, -1, (1, dim), 1, dim, gap=1)
-        self.Bind(wx.EVT_SLIDER, self.OnSlide, self.slider)
+        self.Bind(wx.EVT_SLIDER, self.Draw, self.slider)
         self.lowlabel = wx.StaticText(self.panel, -1, '  %i'%self.slider.GetLow(), style=wx.ALIGN_CENTER|wx.ST_NO_AUTORESIZE)
         self.highlabel = wx.StaticText(self.panel, -1, '  %i'%self.slider.GetHigh(), style=wx.ALIGN_CENTER|wx.ST_NO_AUTORESIZE)
 
@@ -127,7 +129,7 @@ class TensionsFrame(wx.Frame):
         
         labelskip = wx.StaticText(self.paramspanel, -1, 'Take every (frame)')
         self.skipspin = wx.SpinCtrl(self.paramspanel, -1, '1', min=1, max=dim)
-        self.Bind(wx.EVT_SPINCTRL, self.OnSkip, self.skipspin)
+        self.Bind(wx.EVT_SPINCTRL, self.OnNewData, self.skipspin)
         flexsz.Add(labelskip, 0, wx.GROW|wx.ALIGN_RIGHT|wx.ALIGN_CENTER_VERTICAL)
         flexsz.Add(self.skipspin, 1, wx.GROW)
 
@@ -164,23 +166,21 @@ class TensionsFrame(wx.Frame):
         paramsbox.Add(flexsz, 0)
 
         self.paramspanel.SetSizer(paramsbox)
-    
-    def OnSlide(self, evt):
-        self.lowlabel.SetLabel('%i'%self.slider.GetLow())
-        self.highlabel.SetLabel('%i'%self.slider.GetHigh())
-        self.Draw(evt)
-#        evt.Skip()
 
     def OnSaveTxt(self, evt):
-        savedlg = wx.FileDialog(self, 'Save data', self.GetParent().folder,
-                            'tensions.dat', wildcard = '*.*',
+        
+        savedlg = wx.FileDialog(self, 'Save pore data', '',
+                            'pores.txt', wildcard = '*.*',
                             style=wx.FD_SAVE|wx.FD_OVERWRITE_PROMPT)
         if savedlg.ShowModal() == wx.ID_CANCEL:
             evt.Skip()
             return
         datname = savedlg.GetPath()
         savedlg.Destroy()
-        np.savetxt(datname, self.data)
+        header = '#pore radius (pixel)\ty_top\tx_top\ty_bottom\tx_bottom\tframe No\n'
+        with open(datname, 'w') as fout:
+            fout.write(header)
+            np.savetxt(fout, self.data.T, fmt='%.7e')
         evt.Skip()
 
     def OnOpenTxt(self, evt):
@@ -191,30 +191,47 @@ class TensionsFrame(wx.Frame):
             return
         filename = fileDlg.GetPath()
         fileDlg.Destroy()
-        
         try:
             self.data = np.loadtxt(filename, unpack=1)
-            self.data[0] = np.log(self.data[0])
-            maxframe = int(max(self.data[5]))
-            minframe = int(min(self.data[5]))
-            self.slider.SetMax(maxframe)
-            self.slider.SetHigh(maxframe)
-            self.slider.SetMin(minframe)
-            self.slider.SetLow(minframe)
-            self.skipspin.SetRange(1, self.data.shape[1])
-            self.OnSlide(evt)
+            self.init_new_data()
+            self.Draw(evt)
         except Exception, e:
             self.OnError(str(e))
         evt.Skip()
+    
+    def init_new_data(self):
+#        self.data[0] = np.log(self.data[0])
+        maxframe = int(max(self.data[5]))
+        minframe = int(min(self.data[5]))
+        self.slider.SetMax(maxframe)
+        self.slider.SetHigh(maxframe)
+        self.slider.SetMin(minframe)
+        self.slider.SetLow(minframe)
         
     def OnOpenImg(self, evt):
-        self.OnError('OpenImg not yet implemented')
-
+        fileDlg = wx.FileDialog(self, message='Choose Pore Image file...',
+                                 wildcard='*.*', style=wx.FD_OPEN)
+        if fileDlg.ShowModal() != wx.ID_OK:
+            fileDlg.Destroy()
+            return
+        imagename = fileDlg.GetPath()
+        fileDlg.Destroy()
+        try:
+            self.image, self.nofimg = pores.load_imagestack(imagename)
+            self.skipspin.SetRange(1, self.nofimg)
+            self.skipspin.SetValue(1)
+        except Exception, e:
+            self.OnError('Not an appropriate image: %s'%e)
+        self.OnNewData(evt)
+        
     def OnDebug(self, evt):
         self.OnError('OnDebug not implemented')
     
-    def OnSkip(self, evt):
-        self.OnError('OnSkip not yet implemented')
+    def OnNewData(self, evt):
+        if self.image:
+            self.data = pores.pores(self.image, self.nofimg, self.skipspin.GetValue())
+            self.init_new_data()
+            self.Draw(evt)
         
     def OnError(self, msg):
         """
@@ -226,33 +243,47 @@ class TensionsFrame(wx.Frame):
         errDlg.Destroy()
 
     def Draw(self, evt):
-        low, high = self.slider.GetValue()
-        self.lowvline.set_xdata(low)
-        self.upvline.set_xdata(high)
+        visc = self.viscspin.GetValue() / 1000 #since input value is in mPa*s
+        Rv = self.radiusspin.GetValue() #in 1/s
+        FPS = self.fpsspin.GetValue() # in micrometers
         
-        tofit = self.data[:,low:high]
-        x = tofit[5]
-        y = tofit[0]
+        low, high = self.slider.GetValue()
+        self.lowlabel.SetLabel('%i'%low)
+        self.highlabel.SetLabel('%i'%high)
+        
+#==============================================================================
+#         HINT: where /FPS is present, it only affects plot display,
+#         so that it is in seconds instead of frame numbers;
+#         all the real calculations are carried out on frame numbers,
+#         as it (most probably) gives less rounding etc artifacts
+#==============================================================================
+        
+        self.lowvline.set_xdata(low/FPS)
+        self.upvline.set_xdata(high/FPS)
+        
+        lnr = np.log(self.data[0])
+        f = self.data[5]
+        
+        ind = np.nonzero(np.logical_and(f >= low, f <= high))
+        x = f[ind]
+        y = lnr[ind]
 
         if self.zoomcb.GetValue():
-            self.dataplot.set_data(x, y)
+            self.dataplot.set_data(x/FPS, y)
         else:
-            self.dataplot.set_data(self.data[5], self.data[0])
+            self.dataplot.set_data(f/FPS, lnr)
         
         a, b, corrr, p, stderr = linregress(x, y)
-        self.fitplot.set_data(x, a*x+b)
+        self.fitplot.set_data(x/FPS, a*x+b)
         
-        v = self.viscspin.GetValue() / 1000 #since input value is in mPa*s
-        r = self.radiusspin.GetValue() #in 1/s
-        f = self.fpsspin.GetValue() # in micrometers
-        
-        modelgamma = lambda x: -1.5 * np.pi * v * r*r * f * x
+        modelgamma = lambda x: -1.5 * np.pi * visc * Rv*Rv * FPS * x
         gamma =  modelgamma(a)
-        gammastderr = np.abs(modelgamma(stderr))
+        gammastderr = np.fabs(modelgamma(stderr))
         
         #since r is in micrometers and there is r**2, gamma is in picoNewtons
-        title = '$\\gamma$ = %f $\\pm$ %f pN, from %i to %i'%(gamma, 
-                                                        gammastderr, low, high)
+        title = '$\\gamma$ = %f $\\pm$ %f pN, frames %i to %i'%(gamma, 
+                                                        gammastderr,
+                                                        np.min(x), np.max(x))
 
         self.axes.set_title(title)
         self.axes.legend()
