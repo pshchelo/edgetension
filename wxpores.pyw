@@ -23,9 +23,10 @@ import widgets
 import pores
 
 class TensionsFrame(wx.Frame):
-    def __init__(self, parent, id):
-        wx.Frame.__init__(self, parent, id, title = 'Pore Edge Tension')
+    def __init__(self, parent, id, title):
+        wx.Frame.__init__(self, parent, id, title=title)
 
+        self.basetitle = title
         self.data = np.zeros((6,1))
         self.image = None
         self.nofimg = 0
@@ -193,14 +194,18 @@ class TensionsFrame(wx.Frame):
         fileDlg.Destroy()
         try:
             self.data = np.loadtxt(filename, unpack=1)
-            self.init_new_data()
-            self.Draw(evt)
         except Exception, e:
             self.OnError(str(e))
+            evt.Skip()
+            return
+        self.image = None
+        self.nofimg = 0
+        self.init_new_data()
+        self.SetTitle('%s-%s'%(filename, self.basetitle))
+        self.Draw(evt)
         evt.Skip()
     
     def init_new_data(self):
-#        self.data[0] = np.log(self.data[0])
         maxframe = int(max(self.data[5]))
         minframe = int(min(self.data[5]))
         self.slider.SetMax(maxframe)
@@ -218,10 +223,13 @@ class TensionsFrame(wx.Frame):
         fileDlg.Destroy()
         try:
             self.image, self.nofimg = pores.load_imagestack(imagename)
-            self.skipspin.SetRange(1, self.nofimg)
-            self.skipspin.SetValue(1)
         except Exception, e:
             self.OnError('Not an appropriate image: %s'%e)
+            return
+        self.data = np.zeros((6,1))            
+        self.SetTitle('%s-%s'%(imagename, self.basetitle))
+        self.skipspin.SetRange(1, self.nofimg)
+        self.skipspin.SetValue(1)
         self.OnNewData(evt)
         
     def OnDebug(self, evt):
@@ -296,6 +304,6 @@ class TensionsFrame(wx.Frame):
         
 if __name__ == '__main__':
     app = wx.PySimpleApp()
-    frame = TensionsFrame(None, -1)
+    frame = TensionsFrame(None, -1, 'Pore Edge Tension')
     frame.Show()
     app.MainLoop()
