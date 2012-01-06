@@ -181,7 +181,7 @@ class TensionsFrame(wx.Frame):
         header = '#pore radius (pixel)\ty_top\tx_top\ty_bottom\tx_bottom\tframe No\n'
         with open(datname, 'w') as fout:
             fout.write(header)
-            np.savetxt(fout, self.data.T, fmt='%.7e')
+            np.savetxt(fout, self.data.T, fmt='%g')
         evt.Skip()
 
     def OnOpenTxt(self, evt):
@@ -289,11 +289,12 @@ class TensionsFrame(wx.Frame):
         gammastderr = np.fabs(modelgamma(stderr))
         
         #since r is in micrometers and there is r**2, gamma is in picoNewtons
-        title = '$\\gamma$ = %f $\\pm$ %f pN, frames %i to %i'%(gamma, 
+        title1 = '$\\gamma$ = %f $\\pm$ %f pN, frames %i to %i'%(gamma, 
                                                         gammastderr,
                                                         np.min(x), np.max(x))
+        title2 = ' %g FPS, $R_v$ = %g$\\mu$m, $\\nu$ = %g Pa*s'%(FPS, Rv, visc)
 
-        self.axes.set_title(title)
+        self.axes.set_title('\n'.join((title1, title2)))
         self.axes.legend()
 
         self.axes.relim()
