@@ -5,6 +5,7 @@ Created on Sun Dec 25 15:15:39 2011
 @author: family
 """
 from __future__ import division
+import os
 
 import wx
 from wx.lib.agw import floatspin as FS
@@ -21,6 +22,10 @@ from scipy.stats import linregress
 
 import widgets
 import pores
+
+DATWILDCARD = "Data files (TXT, CSV, DAT)|*.txt;*.TXT;*.csv;*.CSV;*.dat;*.DAT | All files (*.*)|*.*"
+IMGWILDCARD = "TIFF files (TIF, TIFF)|*.tif;*.TIF;*.tiff;*.TIFF | All files (*.*)|*.*"
+from PIL.Image import FLIP_TOP_BOTTOM
 
 class TensionsFrame(wx.Frame):
     def __init__(self, parent, id, title):
@@ -171,7 +176,7 @@ class TensionsFrame(wx.Frame):
     def OnSaveTxt(self, evt):
         
         savedlg = wx.FileDialog(self, 'Save pore data', '',
-                            'pores.txt', wildcard = '*.*',
+                            'pores.txt', wildcard = DATWILDCARD,
                             style=wx.FD_SAVE|wx.FD_OVERWRITE_PROMPT)
         if savedlg.ShowModal() == wx.ID_CANCEL:
             evt.Skip()
@@ -186,22 +191,23 @@ class TensionsFrame(wx.Frame):
 
     def OnOpenTxt(self, evt):
         fileDlg = wx.FileDialog(self, message='Choose Pore Radius file...',
-                                 wildcard='*.*', style=wx.FD_OPEN)
+                                 wildcard=DATWILDCARD, style=wx.FD_OPEN)
         if fileDlg.ShowModal() != wx.ID_OK:
             fileDlg.Destroy()
             return
-        filename = fileDlg.GetPath()
+        self.datapath = fileDlg.GetPath()
         fileDlg.Destroy()
         try:
-            self.data = np.loadtxt(filename, unpack=1)
+            self.data = np.loadtxt(self.datapath, unpack=1)
         except Exception, e:
             self.OnError(str(e))
             evt.Skip()
             return
         self.image = None
+        self.imagepath = ''
         self.nofimg = 0
         self.init_new_data()
-        self.SetTitle('%s-%s'%(filename, self.basetitle))
+        self.SetTitle('%s-%s'%(self.datapath, self.basetitle))
         self.Draw(evt)
         evt.Skip()
     
@@ -215,25 +221,28 @@ class TensionsFrame(wx.Frame):
         
     def OnOpenImg(self, evt):
         fileDlg = wx.FileDialog(self, message='Choose Pore Image file...',
-                                 wildcard='*.*', style=wx.FD_OPEN)
+                                 wildcard=IMGWILDCARD, style=wx.FD_OPEN)
         if fileDlg.ShowModal() != wx.ID_OK:
             fileDlg.Destroy()
             return
-        imagename = fileDlg.GetPath()
+        self.imagepath = fileDlg.GetPath()
         fileDlg.Destroy()
         try:
-            self.image, self.nofimg = pores.load_imagestack(imagename)
+            self.image, self.nofimg = pores.load_imagestack(self.imagepath)
         except Exception, e:
             self.OnError('Not an appropriate image: %s'%e)
             return
-        self.data = np.zeros((6,1))            
-        self.SetTitle('%s-%s'%(imagename, self.basetitle))
+        self.data = np.zeros((6,1))
+        self.datapath = ''
+        self.SetTitle('%s-%s'%(self.imagepath, self.basetitle))
         self.skipspin.SetRange(1, self.nofimg)
         self.skipspin.SetValue(1)
         self.OnNewData(evt)
         
     def OnDebug(self, evt):
-        self.OnError('OnDebug not implemented')
+        debugwindow = PoreDebugFrame(self, -1, self.data, images=self.image, 
+                                     datpath=self.datapath, imgpath=self.imagepath)
+        debugwindow.Show()
     
     def OnNewData(self, evt):
         if self.image:
@@ -302,6 +311,72 @@ class TensionsFrame(wx.Frame):
 
         self.canvas.draw()
         evt.Skip()
+
+class PoreDebugFrame(wx.Frame):
+    """"""
+    def __init__(self, parent, id, data, images=None, datpath='', imgpath=''):
+        """"""
+        wx.Frame.__init__(self, parent, id)
+        
+        self.data = data
+        self.datpath = datpath
+        if images and imgpath:
+            self.images = images
+            self.imgpath = imgpath
+        else:
+            fileDlg = wx.FileDialog(self, message='Choose Pore Image file...',
+                                 wildcard=IMGWILDCARD, style=wx.FD_OPEN)
+            if fileDlg.ShowModal() != wx.ID_OK:
+                fileDlg.Destroy()
+                self.Close()
+            self.imgpath = fileDlg.GetPath()
+            fileDlg.Destroy()
+            self.images, imgno = pores.load_imagestack(self.imgpath)
+        
+        title = 'Debug - %s // %s'%(self.imgpath, self.datpath) 
+        self.SetTitle(title)
+                
+        self.panel = wx.Panel(self, -1)
+
+        self.statusbar = widgets.PlotStatusBar(self)
+        self.SetStatusBar(self.statusbar)
+        
+        self.frameslider = wx.Slider(self.panel, -1, value=0, 
+                                minValue=0, maxValue=data.shape[1]-1)
+        self.Bind(wx.EVT_SLIDER, self.OnSlide, self.frameslider)
+        
+        self.makePlot()
+        navtoolbar = NavigationToolbar2(self.canvas)
+        navtoolbar.Realize()
+        
+        vbox = wx.BoxSizer(wx.VERTICAL)
+        vbox.Add(self.canvas, 1, wx.GROW)
+        vbox.Add(navtoolbar, 0, wx.ALIGN_LEFT|wx.GROW)
+        vbox.Add(self.frameslider, 0, wx.GROW)
+        
+        self.panel.SetSizer(vbox)        
+        vbox.Fit(self)
+        
+    def makePlot(self):
+        """creates plot with navbar etc"""
+        self.figure = Figure(facecolor = widgets.rgba_wx2mplt(self.panel.GetBackgroundColour()))
+        self.canvas = FigureCanvas(self.panel, -1, self.figure)
+        self.canvas.mpl_connect('motion_notify_event', self.statusbar.SetPosition)
+        self.axes = self.figure.add_subplot(111)
+        self.axes.set_aspect('equal')
+        self.OnSlide(wx.EVT_SLIDER)
+        
+    def OnSlide(self, evt):
+        self.axes.clear()
+        index = self.frameslider.GetValue()
+        r, y1, x1, y2, x2, frame = self.data[:,index]
+        self.images.seek(frame-1)
+        self.axes.plot((x1, x2),(y1,y2),'yo-', lw=3, ms=5, alpha=0.75)
+        #TODO: make clear on what happens with flipping of the image
+        self.axes.imshow(self.images.transpose(FLIP_TOP_BOTTOM), aspect='equal', cmap='gray')
+        title = 'frame %i, Rpore = %g px'%(frame, r)
+        self.axes.set_title(title)
+        self.canvas.draw()
         
 if __name__ == '__main__':
     app = wx.PySimpleApp()
