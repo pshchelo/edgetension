@@ -30,7 +30,7 @@ Converting images to a stack and rotating them if necessary can be performed wit
 
 Image processing with ImageJ for membrane detection
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-*This section is copy-pasted with minor editions from T.Portet's manual.*
+*This section is copy-pasted with some editions from T.Portet's manual.*
 
 You first have to open this stack with ImageJ, define a rectangular selection 
 enclosing the vesicle, and crop the image. You have to make sure that for 
@@ -55,6 +55,17 @@ in the file macros_processing.txt. For using this macro, first install it in Ima
 (Plugin, Macros, Install, choose file macros processing.txt), then simply use 
 the shortcut p. (This macro named process image will also appear in the menu
 Plugins, Macros.)
+
+**Update:** The whole toolbar for poration image preparation is now available.
+Just copy "Poration Toolset.txt" to "[ImageJ folder]/macros/toolsets/" folder, 
+restart ImageJ, click on right-most ">>" button on the ImageJ toolbar and choose
+"Poration Toolset". This will fill the right part of the toolbar with buttons 
+and menues for most used tools and functions when preparing images of 
+poration experiments to help you minimize deep ImageJ submenu navigation. 
+It also includes button providing the same macros T.Portet has included before,
+so you do not need to install it anymore. Since the icons on tools might 
+be somewht cryptic, pay attention to the ImageJ tooltips for these buttons, 
+they show what the buttons mean.
 
 In some cases, we have to remove residual white pixels appearing inside the 
 vesicle, because they could lead to errors in the pore radius measurements. 

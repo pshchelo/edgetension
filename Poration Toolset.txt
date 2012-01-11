@@ -1,0 +1,31 @@
+// "Poration Analysis Tools"
+
+	var sCmds = newMenu("Pore Images Menu Tool", 
+		newArray("Image Sequence...", "-", "Make Substack...", "Crop", "-", "Rotate 90 Degrees Left", "Rotate 90 Degrees Right"));
+	macro "Pore Images Menu Tool - C037T0d14PT6d14oTed14r" {
+	       cmd = getArgument();
+	       if (cmd!="-") run(cmd);
+	}
+
+	macro "Procedure of T.Portet Action Tool - C037T5d14P"{
+		run("Subtract Background...", "rolling=50 sliding stack");
+		run("Find Edges", "stack");
+		run("Make Binary", "calculate black");
+	}
+
+	macro "Open sequence and Zoom 3x Action Tool- C037T0d14OTad14Z"{
+		run("Image sequence...");
+		run("Set... ", "zoom=300");
+	}
+	
+	macro "Make Substack Action Tool- C037T0d14ST6d14uTdd14b"{
+		run("Make Substack...");
+	}
+
+	macro "Rotate 90 Degree Left Action Tool- C037T0d14RTad14l"{
+		run("Rotate 90 Degree Left");
+	}
+	
+	macro "Rotate 90 Degree Right Action Tool- C037T0d14RTad14r"{
+		run("Rotate 90 Degree Right");
+	}
