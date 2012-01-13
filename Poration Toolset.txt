@@ -29,3 +29,7 @@
 	macro "Rotate 90 Degrees Right Action Tool- C037T0d14RTad14r"{
 		run("Rotate 90 Degrees Right");
 	}
+	
+	macro "Save as TIFF  Action Tool - C037T0d14TT7d14iTcd14f"{
+		run("Tiff...");
+	}
