@@ -14,7 +14,7 @@
 	}
 
 	macro "Open sequence and Zoom 3x Action Tool- C037T0d14OTad14Z"{
-		run("Image sequence...");
+		run("Image Sequence...");
 		run("Set... ", "zoom=300");
 	}
 	
@@ -22,10 +22,10 @@
 		run("Make Substack...");
 	}
 
-	macro "Rotate 90 Degree Left Action Tool- C037T0d14RTad14l"{
-		run("Rotate 90 Degree Left");
+	macro "Rotate 90 Degrees Left Action Tool- C037T0d14RTad14l"{
+		run("Rotate 90 Degrees Left");
 	}
 	
-	macro "Rotate 90 Degree Right Action Tool- C037T0d14RTad14r"{
-		run("Rotate 90 Degree Right");
+	macro "Rotate 90 Degrees Right Action Tool- C037T0d14RTad14r"{
+		run("Rotate 90 Degrees Right");
 	}
