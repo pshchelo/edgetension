@@ -312,13 +312,15 @@ class DoubleSlider(wx.Panel):
 
 
 class TensionsFrame(wx.Frame):
-    def __init__(self, parent, id, title):
+    def __init__(self, parent, id, title, filename=None, skip=1):
         wx.Frame.__init__(self, parent, id, title=title)
 
         self.basetitle = title
         self.data = np.zeros((6,1))
         self.image = None
         self.nofimg = 0
+        self.imagepath = filename
+        self.skip = skip
         
         self.panel = wx.Panel(self, -1)
 
@@ -342,6 +344,8 @@ class TensionsFrame(wx.Frame):
 
         self.SetFrameIcons(wx.ART_TIP, (16,24,32))
         hbox.Fit(self)
+        if self.imagepath:
+            self.open_images(wx.PyCommandEvent(wx.EVT_BUTTON.typeId, self.GetId()))
 
     def MakeImagePanel(self):
         self.figure = Figure(facecolor = rgba_wx2mplt(self.panel.GetBackgroundColour()))
@@ -511,6 +515,9 @@ class TensionsFrame(wx.Frame):
             return
         self.imagepath = fileDlg.GetPath()
         fileDlg.Destroy()
+        self.open_images(evt)
+        
+    def open_images(self, evt):        
         try:
             self.image, self.nofimg = load_imagestack(self.imagepath)
         except Exception, e:
@@ -520,7 +527,7 @@ class TensionsFrame(wx.Frame):
         self.datapath = ''
         self.SetTitle('%s - %s'%(self.imagepath, self.basetitle))
         self.skipspin.SetRange(1, self.nofimg)
-        self.skipspin.SetValue(1)
+        self.skipspin.SetValue(self.skip)
         self.OnNewData(evt)
         
     def OnDebug(self, evt):
@@ -663,31 +670,33 @@ class PoreDebugFrame(wx.Frame):
         self.canvas.draw()
         
 if __name__ == '__main__':
-#    import sys
-#    import argparse
-#    parser = argparse.ArgumentParser(description = 'Extract pore positions and radii.',
-#                    epilog="""Outputs TSV text file named imagename_skipXXX.txt, with 6 columns:
-#                                    pore radius in pixels, 
-#                                    4 columns for x and y coordinates of pore edges, 
-#                                    corresponding frame number.""")
-#    parser.add_argument('filename', help="Name of the multipage b/w tiff file")
-#    parser.add_argument('--skip', default=1, type=int, help='Analyse only every SKIPth frame (default is every frame)')
-#    parser.add_argument('--test', type=int, default=0, help='Run the procedure TEST times and report the minimal of them')
-#    
-#    if len(sys.argv)==1:
-#        parser.print_help()
-#        sys.exit(1)
-#    args = parser.parse_args()
-#    
-#    if args.test > 0:
-#        import timeit
-#        print min(timeit.repeat("process_image('%s', %i)"%(args.filename, args.skip), 
-#                                "from __main__ import process_image", 
-#                                repeat=args.test, number=1))
-#    else:
-#        process_image(args.filename, args.skip)
-        
-    app = wx.PySimpleApp()
-    frame = TensionsFrame(None, -1, 'Pore Edge Tension')
-    frame.Show()
-    app.MainLoop()
+    import argparse
+    parser = argparse.ArgumentParser(description = 'Extract pore positions and radii.',
+                    epilog="""with --nogui outputs TSV text file named imagename_skipXXX.txt, with 6 columns:
+                                    pore radius in pixels,
+                                    4 columns for x and y coordinates of pore edges,
+                                    corresponding frame number.""")
+    parser.add_argument('--file', '-f', default='', 
+                        help="Name of the multipage b/w tiff file to process")
+    parser.add_argument('--skip', '-s', default=1, type=int, 
+                        help='Analyse only every SKIPth frame (default is every frame)')
+    parser.add_argument('--test', '-t', type=int, default=0, 
+                        help='Run the procedure TEST times and report the minimal of them')
+    parser.add_argument('--nogui', '-n', default=False, action='store_true', 
+                        help='Run in no GUI mode suitable for batch processing.')
+    
+    args = parser.parse_args()
+    
+    if args.test > 0:
+        import timeit
+        print min(timeit.repeat("process_image('%s', %i)"%(args.file, args.skip), 
+                                "from __main__ import process_image", 
+                                repeat=args.test, number=1))
+    elif args.nogui:
+        process_image(args.file, args.skip)
+    else:    
+        app = wx.PySimpleApp(False)
+        frame = TensionsFrame(None, -1, 'Pore Edge Tension', 
+                              filename=args.file, skip=args.skip)
+        frame.Show()
+        app.MainLoop()

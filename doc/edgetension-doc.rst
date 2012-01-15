@@ -1,12 +1,17 @@
 Pore Tension Calculation
 ========================
+:Info: http:/sites.google.com/shchelokovskyy
+:Author: Pavlo Shchelokovskyy <shchelokovskyy@gmail.com>
+:Description: use Docutils or http://rst2a.com to convert to HTML, PDF or other formats.
 
 What's this about
 -----------------
 
 The initial procedure for calculating vesicle pore edge tension from electroporation 
 images was written by Thomas Portet while his stay in Max-Planck-Institute of 
-Colloids and Inerfaces between April and June 2009.
+Colloids and Inerfaces between April and June 2009. 
+Some parts of this document are heavily based on the document "howto.pdf"
+written by him as a documentation for his project.
 
 Initial procedure uses a mix of ImageJ and MATLAB to do the job. 
 While the first one being FLOSS is acceptable, MATLAB is an expensive 
@@ -19,7 +24,6 @@ Image acquisition and processing
 
 Image acquisition and storage
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-*This section is copy-pasted with minor editions from T.Portet's manual.*
 
 Images must be transferred from the camera in tiff format. 
 Acquisition must be performed with a linear timescale. Images related to an 
@@ -30,7 +34,6 @@ Converting images to a stack and rotating them if necessary can be performed wit
 
 Image processing with ImageJ for membrane detection
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-*This section is copy-pasted with some editions from T.Portet's manual.*
 
 You first have to open this stack with ImageJ, define a rectangular selection 
 enclosing the vesicle, and crop the image. You have to make sure that for 
@@ -40,23 +43,18 @@ image.
 
 As a first step in this membrane detection stage, perform an image background 
 correction by using the background subtraction rolling-ball algorithm 
-[Sternberg(1983)], with ball radius set to 50 pixels (Process, 
+[Sternberg1983]_, with ball radius set to 50 pixels (Process, 
 Subtract Background, Sliding Paraboloid, 50 pixels). A ball radius of 
 50 pixels gave good results with processed images, other values can also 
 be tried if problems. Then locate the membrane position by using a common Sobel 
 edge detector to highlight sharp changes in intensity (Process, Find Edges). 
 The last step is the image binarization (Process, Binary, Make Binary, Calculate
 Threshold for each Image, Black Background) where the threshold value is 
-calculated using the classical Isodata algorithm [Ridler and Calvard(1978)]. 
+calculated using the classical Isodata algorithm [Ridler_Calvard1978]_. 
 Of course all these three operations should be performed on the entire stack. 
 
-There is a macro for performing automatically these three procedures 
-in the file macros_processing.txt. For using this macro, first install it in ImageJ 
-(Plugin, Macros, Install, choose file macros processing.txt), then simply use 
-the shortcut p. (This macro named process image will also appear in the menu
-Plugins, Macros.)
-
-**Update:** The whole toolbar for poration image preparation is now available.
+The whole toolbar for poration image preparation is available to simplify 
+the image processing with ImageJ.
 Just copy "Poration Toolset.txt" to "[ImageJ folder]/macros/toolsets/" folder, 
 restart ImageJ, click on right-most ">>" button on the ImageJ toolbar and choose
 "Poration Toolset". This will fill the right part of the toolbar with buttons 
@@ -76,6 +74,14 @@ residuals pixels and the membrane. This solution is often easier to apply than
 the one consisting in removing the residual pixels, and can be easily applied 
 to the whole stack.
 
+.. [Sternberg1983] Sternberg, S., 1983. 
+   Biomedical Image Processing. 
+   *IEEE Comput.* **16**:22-34.
+
+.. [Ridler_Calvard1978] Ridler, T. W., and S. Calvard, 1978. 
+   Picture Thresholding Using an Iterative Selection Method. 
+   *IEEE Trans. Syst. Man. Cybern.* **8**:630-632.
+
 User manual for Python implementation
 -------------------------------------
 
@@ -89,32 +95,35 @@ Prerequisites (version developed and tested with is given in parentheses):
 - wxPython (2.8.12.1) - for Graphical User Interface
 
 
-Run pores.py -h and fitpore.py -h to see available command line options and explanations.
+Run pores.py -h to see available command line options and explanations.
 
-pores.pyw
+pores.py
 ~~~~~~~~
 
 ::
 
-	usage: pores.py [-h] [--skip SKIP] [--test TEST] filename
+    usage: pores.py [-h] [--file FILE] [--skip SKIP] [--test TEST] [--nogui]
+    
+    Extract pore positions and radii.
+    
+    optional arguments:
+      -h, --help            show this help message and exit
+      --file FILE, -f FILE  Name of the multipage b/w tiff file to process
+      --skip SKIP, -s SKIP  Analyse only every SKIPth frame (default is every
+                            frame)
+      --test TEST, -t TEST  Run the procedure TEST times and report the minimal of
+                            them
+      --nogui, -n           Run in no GUI mode suitable for batch processing.
+    
+    with --nogui outputs TSV text file named imagename_skipXXX.txt, with 6
+    columns: pore radius in pixels, 4 columns for x and y coordinates of pore
+    edges, corresponding frame number.
 
-	Extract pore positions and radii.
-
-	positional arguments:
-	  filename     Name of the multipage b/w tiff file
-
-	optional arguments:
-	  -h, --help   show this help message and exit
-	  --skip SKIP  Analyse only every SKIPth frame (default is every frame)
-	  --test TEST  Run the procedure TEST times and report the minimal of them
-
-	Outputs TSV text file named imagename_skipXXX.txt, with 6 columns: pore radius
-	in pixels, 4 columns for x and y coordinates of pore edges, corresponding
-	frame number.
-
-When you launch pores.pyw, you will be presented with a window containing 
+When you launch pores.py, you will be presented with a window containing 
 a toolbar, an empty plot with a plot toolbar and two horizontal sliders 
-under it, a parameters panel on the right side and a status bar at the bottom.
+under it, a parameters panel on the right side and a status bar at the bottom. 
+Also the a standard console window will open in background, showing errors and 
+warnings when they happen.
 
 Toolbar has the following buttons:
 
@@ -163,7 +172,21 @@ and its standard error (derived from the fit), the frame interval where the fit
 was performed and values of other material parameters used for fit. If the value 
 of edge tension is displayed as "nan" (i.e. not a number), it means that the 
 fitting has failed due to presence of pore radius zero somewhere in the defined 
-region of fit.
+region of fit. Such data also produce warnings in the background console, 
+something like
+
+::
+
+    C:\pores.py:572: RuntimeWarning: divide by zero encountered in log
+      lnr = np.log(self.data[0])
+    C:\Python27\lib\site-packages\numpy\lib\function_base.py:1989: RuntimeWarning: invalid value encountered in subtract
+      X -= X.mean(axis=1-axis)[tup]
+    C:\Python27\lib\site-packages\scipy\stats\stats.py:2810: RuntimeWarning: invalid value encountered in absolute
+      prob = distributions.t.sf(np.abs(t),df)*2
+
+
+Just ignore this. However if there are other messages not of this type, 
+it may be a bug. In this case contact me and I will try to investigate.
 
 *Note:* in this program the first frame of the multi-page TIFF image is numbered 1, 
 as done by ImageJ. This can be different from frame numbers by image acquisition 
@@ -179,6 +202,7 @@ with the help of the slider, and the found pore will be shown as a line
 joining the edges of the pore established by the algorithm (or a single dot 
 in the center of the image if no pore was found). The title of the image 
 will show you the current frame number and found pore radius in pixels.
+
 
 Technical details
 -----------------
@@ -216,17 +240,3 @@ on the right side (see section on image processing).
 #. For nonzero elements in lower-right quadrant take element and its position 
    with the maximal angle.
 #. Find distance between these two points, filtering out possible overlapping cases.
-
-MATLAB files
-~~~~~~~~~~~~
-
-Here is my idea of what those Matlab files were specifically for:
-
-- affiche.m - displays sets of R**2 * ln(r) lines for user to visually determine 
-  the linear regime boundaries (english: display)
-- chargement.m - loads data from txt file user creates from MS Excel file;
-  aslo stores names of corresponding image files (english: load)
-- fit_lineaire.m - make linear fit of data (self-explanatory)
-- pentes.m - makes series of linear fits and extracts tension values from them 
-  (english: slopes)
-- trous.m - performs image analysis to find pore radius (english: holes)
