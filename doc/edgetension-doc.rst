@@ -88,10 +88,10 @@ Prerequisites (version developed and tested with is given in parentheses):
 - MatPlotLib (1.1.0) - for plotting
 - wxPython (2.8.12.1) - for Graphical User Interface
 
-Put pores.py and fitpore.py somewhere in the PATH, or adjust the PATH to include them.
+
 Run pores.py -h and fitpore.py -h to see available command line options and explanations.
 
-pores.py
+pores.pyw
 ~~~~~~~~
 
 ::
@@ -111,42 +111,10 @@ pores.py
 	Outputs TSV text file named imagename_skipXXX.txt, with 6 columns: pore radius
 	in pixels, 4 columns for x and y coordinates of pore edges, corresponding
 	frame number.
-  
-fitpore.py
-~~~~~~~~~~
 
-::
-
-	usage: fitpore.py [-h] [-s S] [-e E] [-r R] [-f F] [-v V] filename
-
-	Get pore tension in 2 steps.
-
-	positional arguments:
-	  filename    Name of the input file with pore radii and frame numbers
-
-	optional arguments:
-	  -h, --help  show this help message and exit
-	  -s S        Start of the linear region (frame number)
-	  -e E        End of the linear region (frame number)
-	  -r R        Initial radius of the vesicle in microns.
-	  -f F        Speed of image acquisition in frames per second
-	  -v V        Viscosity of the bulk solution in Pa*s (defaults 1e-3 Pa*s for water)
-
-	First run with only a filename as input and remember the boundaries of the
-	linear stage. Then run again supplying all arguments to get the linear region
-	fitted and pore tension displayed.
-
-wxpores.pyw
-~~~~~~~~~~~
-
-This is a graphical interface to "pores.py" and a substitute for "fitpore.py", 
-rendering the latter obsolete, with "pores.py" still usable for batch analysis 
-of large number of images. Put "wxpores.pyw", "pores.py" and "widgets.py" 
-together in one folder and launch wxpores.pyw.
-
-You will be presented with a window containing a toolbar, an empty plot with a 
-plot toolbar and two horizontal sliders under it, a parameters panel on the 
-right side and a status bar at the bottom.
+When you launch pores.pyw, you will be presented with a window containing 
+a toolbar, an empty plot with a plot toolbar and two horizontal sliders 
+under it, a parameters panel on the right side and a status bar at the bottom.
 
 Toolbar has the following buttons:
 

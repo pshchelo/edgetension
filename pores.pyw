@@ -7,6 +7,13 @@ Created on Sun Dec 25 15:15:39 2011
 from __future__ import division
 import os
 
+import numpy as np
+from scipy.stats import linregress
+from scipy.misc import fromimage
+from scipy.ndimage import label
+
+from PIL import Image
+
 import wx
 from wx.lib.agw import floatspin as FS
 
@@ -17,15 +24,292 @@ from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas
 from matplotlib.backends.backend_wxagg import NavigationToolbar2WxAgg as NavigationToolbar2
 from matplotlib.figure import Figure
 
-import numpy as np
-from scipy.stats import linregress
-
-import widgets
-import pores
-
 DATWILDCARD = "Data files (TXT, CSV, DAT)|*.txt;*.TXT;*.csv;*.CSV;*.dat;*.DAT | All files (*.*)|*.*"
 IMGWILDCARD = "TIFF files (TIF, TIFF)|*.tif;*.TIF;*.tiff;*.TIFF | All files (*.*)|*.*"
-from PIL.Image import FLIP_TOP_BOTTOM
+
+def count_tiff_frames(tiffimage):
+    """Counts frames in a multipage TIFF file"""
+    count = 0
+    while True:
+        try:
+            tiffimage.seek(count)
+        except EOFError:
+            return count
+        else:
+            count += 1
+
+def load_imagestack(filename):
+    """Loads images from multipage TIFF"""
+    tif = Image.open(filename)
+    size = count_tiff_frames(tif)
+    return tif, size
+    
+def pores(imagestack, nofimages, njump=1):
+    """Computes pore positions and sizes from binary vesicle images
+
+Images must be adjusted so that the vesicle approximately centered 
+and the pore is in the right half of the image
+
+Input: 
+- njump : interval between images that are analysed (i.e. 100 means 
+  pore size is computed for slices 1, 101, 201, 301...)
+
+"""
+    framenos = np.arange(0, nofimages, njump)
+    edgestop = np.empty((len(framenos),2))
+    edgesbottom = np.empty_like(edgestop)
+
+    #looping through images in the multiimage TIFF
+    for i, frameno in enumerate(framenos):
+        imagestack.seek(frameno)
+        image = fromimage(imagestack)
+        #find the approximate center
+        centerx = image.shape[1]//2
+        centery = image.shape[0]//2
+        
+        s = np.ones((3,3))#structure defining which directions are taken as neighbours
+
+        #right half of the image
+        rimg = image[:,centerx:]
+
+        #label clusters on the image
+        rimglabeled, noflabels = label(rimg, structure=s)
+        
+        #inner intersection of vertical midsection and top part of the vesicle
+        innertop = np.max(np.nonzero(rimg[:centery,0]))
+        #define which cluster it belongs to
+        innertoplabel = rimglabeled[innertop, 0]
+        
+        #inner intersection of vertical midsection and bottom part of the vesicle
+        innerbottom = np.min(np.nonzero(rimg[centery:,0])) + centery
+        #define which cluster it belongs to
+        innerbottomlabel = rimglabeled[innerbottom, 0]
+        
+        #if top and bottom is the same cluster - no pore, just putting edges in the center
+        if innertoplabel == innerbottomlabel: 
+            edgestop[i,:] = centery, centerx
+            edgesbottom[i,:] = centery, centerx
+        else:
+            #take only one cluster representing top/bottom part of the vesicle
+            ytop, xtop = np.nonzero(rimglabeled == innertoplabel)
+            ybottom, xbottom = np.nonzero(rimglabeled == innerbottomlabel)
+            #find angles between positive x-dir of horizontal midsection and all points
+            angletop = np.arctan2(centery - ytop, xtop)
+            anglebottom = np.arctan2(centery - ybottom, xbottom)
+            
+            #if bottom and top clusters are angularly overlapping - no pore
+            if max(anglebottom) >= min(angletop):
+                edgestop[i,:] = centery, centerx
+                edgesbottom[i,:] = centery, centerx
+            else:
+                #take the point with minimal angle from the top cluster
+                mintop = np.argmin(angletop)
+                edgestop[i,:] = ytop[mintop], xtop[mintop]+centerx
+                #take the point with maximal angle from the bototm cluster
+                maxbottom = np.argmax(anglebottom)
+                edgesbottom[i,:] = ybottom[maxbottom], xbottom[maxbottom]+centerx 
+                
+    poreradii = np.sqrt(np.sum((edgesbottom-edgestop)**2, axis=1)) / 2
+    return np.column_stack((poreradii, edgestop, edgesbottom, framenos+1)).T
+    
+def process_image(filename, nskip):
+    """Load image, process it and save results"""
+    tif, nofimg = load_imagestack(filename)
+    data = pores(tif, nofimg, njump=nskip)
+    name, ext = os.path.splitext(filename)
+    nameout = name+'_skip%i.txt'%nskip
+    np.savetxt(nameout, data.T, fmt='%.7e')
+    
+def rgba_wx2mplt(wxcolour):
+    """
+    Convert wx.Colour instance to float tuple of rgba values to range in 0-1 used by matplotlib.
+    @param wxcolour: wx.Colour instance
+    """
+    mpltrgba = []
+    wxrgba = wxcolour.Get(includeAlpha=True)
+    for item in wxrgba:
+        converted = float(item)/255
+        mpltrgba.append(converted)
+    return tuple(mpltrgba)
+
+class PlotStatusBar(wx.StatusBar):
+    '''Status Bar for wxPython VAMP frontend'''
+    def __init__(self, parent):
+        wx.StatusBar.__init__(self, parent)
+        self.SetFieldsCount(2)
+        
+    def SetPosition(self, evt):
+        """
+        Set status bar text to current coordinates on the matplotlib plot/subplot
+        @param evt: must be a matplotlib's motion_notify_event
+        """
+        if evt.inaxes:
+            x = evt.xdata
+            y = evt.ydata
+            self.SetStatusText('x = %f, y = %f'%(x, y), 1)
+
+
+class SimpleToolbar(wx.ToolBar):
+    def __init__(self, parent, *buttons):
+        """
+        Construct and populate a simple wx.ToolBar 
+        
+        @param buttons: tuple or list of ((Bitmap, shortName, longName, isToggle), Handler)
+        
+        """
+        wx.ToolBar.__init__(self, parent)
+        for button in buttons:
+            buttonargs, handler = button
+            tool = self.AddSimpleTool(-1, *buttonargs)
+            self.Bind(wx.EVT_MENU, handler, tool)
+
+
+class DoubleSlider(wx.Panel):
+    '''
+    Provides a panel with two sliders to visually set 2 values (i.e. minimum and maximum, limits etc)
+    '''
+    def __init__(self, parent, id, 
+                 value = (1,100), min=1, max=100, gap = None, 
+                 pos=wx.DefaultPosition, size=wx.DefaultSize,
+                 panelstyle=wx.TAB_TRAVERSAL|wx.NO_BORDER, 
+                 style=wx.SL_HORIZONTAL, name=wx.PanelNameStr):
+        wx.Panel.__init__(self, parent, id, pos=pos, size=size, style=panelstyle, name=name)
+        low, high = value
+        self.coupling = False
+        if gap != None:
+            self.gap = gap
+            self.coupling = True
+        self.lowslider = wx.Slider(self, -1, low, min, max, style=style)
+        self.highslider = wx.Slider(self, -1, high, min, max, style=style)
+        self.Bind(wx.EVT_SLIDER, self.OnSlide, self.lowslider)
+        self.Bind(wx.EVT_SLIDER, self.OnSlide, self.highslider)
+        if style & wx.SL_VERTICAL:
+            sizer = wx.BoxSizer(wx.HORIZONTAL)
+        else:  # horizontal sliders are default
+            sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.Add(self.lowslider, 0, wx.GROW)
+        sizer.Add(self.highslider, 0, wx.GROW)
+        self.SetSizer(sizer)
+        self.Fit()
+        
+    def GetLow(self):
+        """
+        Value of the first(upper or left) slider
+        """
+        return self.lowslider.GetValue()
+    def SetLow(self, int):
+        return self.lowslider.SetValue(int)
+    def GetHigh(self):
+        """
+        Value of the second(lower or right) slider
+        """
+        return self.highslider.GetValue()
+    def SetHigh(self, int):
+        return self.highslider.SetValue(int)
+    def GetValue(self):
+        """
+        Value of both sliders as a tuple
+        """
+        return self.GetLow(), self.GetHigh()
+    def SetValue(self, value):
+        low, high = value
+        self.SetLow(low)
+        self.SetHigh(high)
+    
+    Low = property(GetLow, SetLow)
+    High = property(GetHigh, SetHigh)
+    Value = property(GetValue, SetValue)
+    
+    def GetMin(self):
+        """
+        Minimal value for both sliders
+        """
+        return self.lowslider.GetMin()
+    def SetMin(self, int):
+        self.lowslider.SetMin(int)
+        self.highslider.SetMin(int)
+    def GetMax(self):
+        """
+        Maximum value for both sliders
+        """
+        return self.lowslider.GetMax()
+    def SetMax(self, int):
+        self.lowslider.SetMax(int)
+        self.highslider.SetMax(int)
+    def GetRange(self):
+        """
+        Range of both sliders as a tuple
+        """
+        return self.lowslider.GetRange()
+    def SetRange(self, min, max):
+        self.lowslider.SetRange(min, max)
+        self.highslider.SetRange(min, max)
+    
+    Min = property(GetMin, SetMin)
+    Max = property(GetMax, SetMax)
+    Range = property(GetRange, SetRange)
+        
+    def GetLineSize(self):
+        """
+        The amount of thumb movement when pressing arrow buttons
+        """
+        return self.lowslider.GetLineSize()
+    def SetLineSize(self, int):
+        self.lowslider.SetLineSize(int)
+        self.highslider.SetLineSize(int)
+    def GetPageSize(self):
+        """
+        The amount of thumb movement when pressing Page Up/Down buttons
+        """
+        return self.lowslider.GetPageSize()
+    def SetPageSize(self, int):
+        self.lowslider.SetPageSize(int)
+        self.highslider.SetPageSize(int)
+    
+    LineSize = property(GetLineSize, SetLineSize)
+    PageSize = property(GetPageSize, SetPageSize)
+    
+    def SlideLow(self):
+        low, high = self.GetValue()
+        min, max = self.GetRange()
+        if low > max-self.gap:
+            self.SetLow(max-self.gap)
+            return
+        if low > high-self.gap:
+            self.SetHigh(low+self.gap)
+    
+    def SlideHigh(self):
+        low, high = self.GetValue()
+        min, max = self.GetRange()
+        if high < min+self.gap:
+            self.SetHigh(min+self.gap)
+            return
+        if high < low+self.gap:
+            self.SetLow(high-self.gap)
+    
+    def GetCoupling(self):
+        return self.coupling
+    def SetCoupling(self, state):
+        self.coupling = state
+    
+    def GetGap(self):
+        if self.coupling:
+            return self.gap
+        else:
+            return None
+    def SetGap(self, gap):
+        self.gap = gap
+
+    def OnSlide(self, inevt):
+        if self.coupling and inevt.GetEventObject() == self.lowslider:
+            self.SlideLow()
+        elif self.coupling and inevt.GetEventObject() == self.highslider:
+            self.SlideHigh()
+        event = wx.CommandEvent(inevt.GetEventType(), self.GetId()) 
+        event.SetEventObject(self) 
+        self.GetEventHandler().ProcessEvent(event)
+        inevt.Skip()
+
 
 class TensionsFrame(wx.Frame):
     def __init__(self, parent, id, title):
@@ -38,11 +322,11 @@ class TensionsFrame(wx.Frame):
         
         self.panel = wx.Panel(self, -1)
 
-        self.toolbar = widgets.SimpleToolbar(self, *self.ToolbarData())
+        self.toolbar = SimpleToolbar(self, *self.ToolbarData())
         self.SetToolBar(self.toolbar)
         self.toolbar.Realize()
 
-        self.statusbar = widgets.PlotStatusBar(self)
+        self.statusbar = PlotStatusBar(self)
         self.SetStatusBar(self.statusbar)
 
         self.MakeParamsPanel()
@@ -60,7 +344,7 @@ class TensionsFrame(wx.Frame):
         hbox.Fit(self)
 
     def MakeImagePanel(self):
-        self.figure = Figure(facecolor = widgets.rgba_wx2mplt(self.panel.GetBackgroundColour()))
+        self.figure = Figure(facecolor = rgba_wx2mplt(self.panel.GetBackgroundColour()))
         self.canvas = FigureCanvas(self.panel, -1, self.figure)
         self.canvas.mpl_connect('motion_notify_event', self.statusbar.SetPosition)
         self.axes = self.figure.add_subplot(111)
@@ -81,7 +365,7 @@ class TensionsFrame(wx.Frame):
         dim = self.data.shape[1]
         if dim == 1:
             dim = 2
-        self.slider = widgets.DoubleSlider(self.panel, -1, (1, dim), 1, dim, gap=1)
+        self.slider = DoubleSlider(self.panel, -1, (1, dim), 1, dim, gap=1)
         self.Bind(wx.EVT_SLIDER, self.Draw, self.slider)
         self.lowlabel = wx.StaticText(self.panel, -1, '  %i'%self.slider.GetLow(), style=wx.ALIGN_CENTER|wx.ST_NO_AUTORESIZE)
         self.highlabel = wx.StaticText(self.panel, -1, '  %i'%self.slider.GetHigh(), style=wx.ALIGN_CENTER|wx.ST_NO_AUTORESIZE)
@@ -207,7 +491,7 @@ class TensionsFrame(wx.Frame):
         self.imagepath = ''
         self.nofimg = 0
         self.init_new_data()
-        self.SetTitle('%s-%s'%(self.datapath, self.basetitle))
+        self.SetTitle('%s - %s'%(self.datapath, self.basetitle))
         self.Draw(evt)
         evt.Skip()
     
@@ -228,13 +512,13 @@ class TensionsFrame(wx.Frame):
         self.imagepath = fileDlg.GetPath()
         fileDlg.Destroy()
         try:
-            self.image, self.nofimg = pores.load_imagestack(self.imagepath)
+            self.image, self.nofimg = load_imagestack(self.imagepath)
         except Exception, e:
             self.OnError('Not an appropriate image: %s'%e)
             return
         self.data = np.zeros((6,1))
         self.datapath = ''
-        self.SetTitle('%s-%s'%(self.imagepath, self.basetitle))
+        self.SetTitle('%s - %s'%(self.imagepath, self.basetitle))
         self.skipspin.SetRange(1, self.nofimg)
         self.skipspin.SetValue(1)
         self.OnNewData(evt)
@@ -246,7 +530,7 @@ class TensionsFrame(wx.Frame):
     
     def OnNewData(self, evt):
         if self.image:
-            self.data = pores.pores(self.image, self.nofimg, self.skipspin.GetValue())
+            self.data = pores(self.image, self.nofimg, self.skipspin.GetValue())
             self.init_new_data()
             self.Draw(evt)
         
@@ -331,14 +615,14 @@ class PoreDebugFrame(wx.Frame):
                 self.Close()
             self.imgpath = fileDlg.GetPath()
             fileDlg.Destroy()
-            self.images, imgno = pores.load_imagestack(self.imgpath)
+            self.images, imgno = load_imagestack(self.imgpath)
         
         title = 'Debug - %s // %s'%(self.imgpath, self.datpath) 
         self.SetTitle(title)
                 
         self.panel = wx.Panel(self, -1)
 
-        self.statusbar = widgets.PlotStatusBar(self)
+        self.statusbar = PlotStatusBar(self)
         self.SetStatusBar(self.statusbar)
         
         self.frameslider = wx.Slider(self.panel, -1, value=0, 
@@ -359,7 +643,7 @@ class PoreDebugFrame(wx.Frame):
         
     def makePlot(self):
         """creates plot with navbar etc"""
-        self.figure = Figure(facecolor = widgets.rgba_wx2mplt(self.panel.GetBackgroundColour()))
+        self.figure = Figure(facecolor = rgba_wx2mplt(self.panel.GetBackgroundColour()))
         self.canvas = FigureCanvas(self.panel, -1, self.figure)
         self.canvas.mpl_connect('motion_notify_event', self.statusbar.SetPosition)
         self.axes = self.figure.add_subplot(111)
@@ -373,12 +657,36 @@ class PoreDebugFrame(wx.Frame):
         self.images.seek(frame-1)
         self.axes.plot((x1, x2),(y1,y2),'yo-', lw=3, ms=5, alpha=0.75)
         #TODO: make clear on what happens with flipping of the image
-        self.axes.imshow(self.images.transpose(FLIP_TOP_BOTTOM), aspect='equal', cmap='gray')
+        self.axes.imshow(self.images.transpose(Image.FLIP_TOP_BOTTOM), aspect='equal', cmap='gray')
         title = 'frame %i, Rpore = %g px'%(frame, r)
         self.axes.set_title(title)
         self.canvas.draw()
         
 if __name__ == '__main__':
+#    import sys
+#    import argparse
+#    parser = argparse.ArgumentParser(description = 'Extract pore positions and radii.',
+#                    epilog="""Outputs TSV text file named imagename_skipXXX.txt, with 6 columns:
+#                                    pore radius in pixels, 
+#                                    4 columns for x and y coordinates of pore edges, 
+#                                    corresponding frame number.""")
+#    parser.add_argument('filename', help="Name of the multipage b/w tiff file")
+#    parser.add_argument('--skip', default=1, type=int, help='Analyse only every SKIPth frame (default is every frame)')
+#    parser.add_argument('--test', type=int, default=0, help='Run the procedure TEST times and report the minimal of them')
+#    
+#    if len(sys.argv)==1:
+#        parser.print_help()
+#        sys.exit(1)
+#    args = parser.parse_args()
+#    
+#    if args.test > 0:
+#        import timeit
+#        print min(timeit.repeat("process_image('%s', %i)"%(args.filename, args.skip), 
+#                                "from __main__ import process_image", 
+#                                repeat=args.test, number=1))
+#    else:
+#        process_image(args.filename, args.skip)
+        
     app = wx.PySimpleApp()
     frame = TensionsFrame(None, -1, 'Pore Edge Tension')
     frame.Show()
