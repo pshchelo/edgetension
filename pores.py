@@ -4,13 +4,16 @@ Created on Sun Dec 25 15:15:39 2011
 
 @author: family
 """
+#FIXME: "take every" floatspin is not initialized when opening new from text
+#FIXME: zoom is not initialized when opening new from image
 from __future__ import division
 import os
 
 import numpy as np
-from scipy.stats import linregress
 from scipy.misc import fromimage
 from scipy.ndimage import label
+from scipy.stats import linregress
+from scipy.optimize import curve_fit
 
 from PIL import Image
 
@@ -50,7 +53,7 @@ def pores(imagestack, nofimages, njump=1):
 Images must be adjusted so that the vesicle approximately centered 
 and the pore is in the right half of the image
 
-Input: 
+Input:
 - njump : interval between images that are analysed (i.e. 100 means 
   pore size is computed for slices 1, 101, 201, 301...)
 
@@ -322,6 +325,9 @@ class TensionsFrame(wx.Frame):
         self.imagepath = filename
         self.skip = skip
         
+        self.models = {'Slow closure (linear)':self.fitlinear, 
+                       'Fast closure (quadratic)':self.fitquadratic}
+        
         self.panel = wx.Panel(self, -1)
 
         self.toolbar = SimpleToolbar(self, *self.ToolbarData())
@@ -355,13 +361,12 @@ class TensionsFrame(wx.Frame):
         self.axes.set_aspect('auto')
 
         self.dataplot, = self.axes.plot([], [], 'ro', label = 'Measured')
-        self.fitplot, = self.axes.plot([],[], 'b-', label='Linear Fit', lw=2)
+        self.fitplot, = self.axes.plot([],[], 'b-', label='Fit', lw=2)
         self.lowvline = self.axes.axvline(0, ls='--', c='blue')
         self.upvline = self.axes.axvline(1, ls='--', c='blue')
 
         labelfont = {'fontsize':'large'}
         self.axes.set_xlabel('time, s', fontdict = labelfont)
-        self.axes.set_ylabel('$\ln (r_{pore})$')
 
         navtoolbar = NavigationToolbar2(self.canvas)
         navtoolbar.Realize()
@@ -371,8 +376,10 @@ class TensionsFrame(wx.Frame):
             dim = 2
         self.slider = DoubleSlider(self.panel, -1, (1, dim), 1, dim, gap=1)
         self.Bind(wx.EVT_SLIDER, self.Draw, self.slider)
-        self.lowlabel = wx.StaticText(self.panel, -1, '  %i'%self.slider.GetLow(), style=wx.ALIGN_CENTER|wx.ST_NO_AUTORESIZE)
-        self.highlabel = wx.StaticText(self.panel, -1, '  %i'%self.slider.GetHigh(), style=wx.ALIGN_CENTER|wx.ST_NO_AUTORESIZE)
+        self.lowlabel = wx.StaticText(self.panel, -1, '  %i'%self.slider.GetLow(), 
+                                      style=wx.ALIGN_CENTER|wx.ST_NO_AUTORESIZE)
+        self.highlabel = wx.StaticText(self.panel, -1, '  %i'%self.slider.GetHigh(), 
+                                       style=wx.ALIGN_CENTER|wx.ST_NO_AUTORESIZE)
 
         self.imgbox = wx.BoxSizer(wx.VERTICAL)
         self.imgbox.Add(self.canvas, 1, wx.GROW)
@@ -381,7 +388,7 @@ class TensionsFrame(wx.Frame):
         labelbox = wx.BoxSizer(wx.VERTICAL)
         labelbox.Add(self.lowlabel, 1, wx.GROW)
         labelbox.Add(self.highlabel, 1, wx.GROW)
-
+#TODO: fit labelbox as numbers change or set the minsize when loading images
         sliderbox = wx.BoxSizer(wx.HORIZONTAL)
         sliderbox.Add(labelbox, 0, wx.GROW)
         sliderbox.Add(self.slider, 1, wx.GROW)
@@ -433,7 +440,15 @@ class TensionsFrame(wx.Frame):
         flexsz.Add(labelzoom, 0, wx.GROW|wx.ALIGN_RIGHT|wx.ALIGN_CENTER_VERTICAL)
         flexsz.Add(self.zoomcb, 1, wx.GROW)
 
-        labelradius = wx.StaticText(self.paramspanel, -1, 'Radius (um)')
+        labelscale = wx.StaticText(self.paramspanel, -1, 'Scale (um/pixel)')
+        self.scalespin = FS.FloatSpin(self.paramspanel, -1, 
+                                       value = 0.3, min_val=0, max_val=200, 
+                                       increment=0.1, digits=4)
+        self.Bind(FS.EVT_FLOATSPIN, self.Draw, self.scalespin)
+        flexsz.Add(labelscale, 0, wx.GROW|wx.ALIGN_RIGHT|wx.ALIGN_CENTER_VERTICAL)
+        flexsz.Add(self.scalespin, 1, wx.GROW)
+        
+        labelradius = wx.StaticText(self.paramspanel, -1, 'Radius (pixel)')
         self.radiusspin = FS.FloatSpin(self.paramspanel, -1, 
                                        value = 10., min_val=0, max_val=200, 
                                        increment=1, digits=3)
@@ -458,6 +473,15 @@ class TensionsFrame(wx.Frame):
         flexsz.Add(self.viscspin, 1, wx.GROW)
 
         paramsbox.Add(flexsz, 0)
+        
+        labelmodelchoice = wx.StaticText(self.paramspanel, -1, 'Fitting Model')
+        self.modelchoice = wx.Choice(self.paramspanel, -1, 
+                                     choices = self.models.keys())
+        self.Bind(wx.EVT_CHOICE, self.Draw, self.modelchoice)
+        self.modelchoice.SetSelection(1)
+        
+        paramsbox.Add(labelmodelchoice, 0)
+        paramsbox.Add(self.modelchoice, 0)
 
         self.paramspanel.SetSizer(paramsbox)
 
@@ -551,13 +575,18 @@ class TensionsFrame(wx.Frame):
         errDlg.Destroy()
 
     def Draw(self, evt):
-        visc = self.viscspin.GetValue() / 1000 #since input value is in mPa*s
-        Rv = self.radiusspin.GetValue() #in 1/s
-        FPS = self.fpsspin.GetValue() # in micrometers
+        """Make a fit and draw the plot"""
         
-        low, high = self.slider.GetValue()
+        params = self.getparams()
+        
+        FPS = params['fps']
+        low, high = params['low'], params['high']
+        
         self.lowlabel.SetLabel('%i'%low)
         self.highlabel.SetLabel('%i'%high)
+        
+                
+        model = self.models[params['model']]
         
 #==============================================================================
 #         HINT: where /FPS is present, it only affects plot display,
@@ -569,32 +598,15 @@ class TensionsFrame(wx.Frame):
         self.lowvline.set_xdata(low/FPS)
         self.upvline.set_xdata(high/FPS)
         
-        lnr = np.log(self.data[0])
+        r = self.data[0]
         f = self.data[5]
         
         ind = np.nonzero(np.logical_and(f >= low, f <= high))
         x = f[ind]
-        y = lnr[ind]
+        y = r[ind]
 
-        if self.zoomcb.GetValue():
-            self.dataplot.set_data(x/FPS, y)
-        else:
-            self.dataplot.set_data(f/FPS, lnr)
+        model(f, r, x, y, params)
         
-        a, b, corrr, p, stderr = linregress(x, y)
-        self.fitplot.set_data(x/FPS, a*x+b)
-        
-        modelgamma = lambda x: -1.5 * np.pi * visc * Rv*Rv * FPS * x
-        gamma =  modelgamma(a)
-        gammastderr = np.fabs(modelgamma(stderr))
-        
-        #since r is in micrometers and there is r**2, gamma is in picoNewtons
-        title1 = '$\\gamma$ = %f $\\pm$ %f pN, frames %i to %i'%(gamma, 
-                                                        gammastderr,
-                                                        np.min(x), np.max(x))
-        title2 = ' %g FPS, $R_v$ = %g$\\mu$m, $\\nu$ = %g Pa*s'%(FPS, Rv, visc)
-
-        self.axes.set_title('\n'.join((title1, title2)))
         self.axes.legend()
 
         self.axes.relim()
@@ -602,6 +614,92 @@ class TensionsFrame(wx.Frame):
 
         self.canvas.draw()
         evt.Skip()
+
+    def fitlinear(self, f, r, x, y, params):
+        """Fit slow pore closure after Portet and Dimova 2010"""
+        lnr = np.log(r)
+        lny = np.log(y)
+        self.axes.set_ylabel('$\ln (r_{pore})$')
+        
+        Rv = params['scale'] * params['Rv'] # now Rv in micrometers
+        visc = params['visc']
+        FPS = params['fps']
+        
+        self.toggle_zoom(f/FPS, lnr, x/FPS, lny)
+        
+        a, b, corrr, p, sterr = linregress(x, lny)
+        self.fitplot.set_data(x/FPS, a*x+b)
+        
+        modelgamma = lambda x: -1.5 * np.pi * visc * Rv*Rv * FPS * x
+        gamma =  modelgamma(a)
+        gammasterr = np.fabs(modelgamma(sterr))
+        
+        #since Rv is in micrometers and there is Rv**2, gamma is in picoNewtons
+        title1 = '$\\gamma$ = %f $\\pm$ %f pN, frames %i to %i'%(gamma, 
+                                                        gammasterr,
+                                                        np.min(x), np.max(x))
+        title2 = '%g FPS, %g $\\mu$m/px, $R_v$ = %g$\\mu$m, $\\nu_s$ = %g Pa*s'%(
+                                                FPS, params['scale'], Rv, visc)
+
+        self.axes.set_title('\n'.join((title1, title2)))
+    
+    def fitquadratic(self, f, r, x, y, params):
+        """Fit fast pore closure after Ryham et al 2011"""
+        # magic invaiant constant C appearing in the Ryham et al 2011        
+        CMAGIC = 8.44 # their estimate for data from Portet and Domiva 2010
+        
+        FPS = params['fps']
+        visc = params['visc']
+        scale = params['scale']
+        
+        self.axes.set_ylabel('$r_{pore}$')
+        self.toggle_zoom(f/FPS, r, x/FPS, y)
+        
+        quad = lambda y, c, b, a:  c + b*y + a*y*y
+        
+        popt, pcov = curve_fit(quad, y, x)
+        pstd = np.sqrt(np.diag(pcov))
+
+        yfit = np.linspace(min(y), max(y), 100)
+        self.fitplot.set_data(quad(yfit, *popt)/FPS, yfit)
+
+        gamma = - 0.5 * CMAGIC * visc *scale*scale * FPS / popt[2] # in pN
+        gammastd = np.fabs(pstd[2]*gamma/popt[2])
+
+        nu_m = 0.25 * popt[1] *CMAGIC * visc * scale / popt[2] # in microPa*m*s
+        nu_mstd = 0.25 *CMAGIC * visc * scale * np.sqrt(pstd[1]**2 + 
+                                (popt[1]*pstd[2]/popt[2])**2) / np.fabs(popt[2])
+        
+        t_c = popt[0] / FPS
+        t_cstd = pstd[0] / FPS
+
+        title1 = '$\\gamma$ = %f $\\pm$ %f pN, frames %i to %i'%(gamma, 
+                                                        gammastd,
+                                                        np.min(x), np.max(x))
+        title2 = '%g FPS, %g $\\mu$m/px, $\\nu_s$ = %g Pa*s'%(FPS, scale, visc)
+#        title3 = '$\\nu_m$ = %g $\\pm$ %g Pa*s*m, t_c = %g $\\pm$ %g s'%(
+#                                                            nu_m, nu_mstd, 
+#                                                            t_c, t_cstd)
+
+        self.axes.set_title('\n'.join((title1, title2)))#, title3)))
+    
+    def toggle_zoom(self, x, y, subx, suby):
+        if self.zoomcb.GetValue():
+            self.dataplot.set_data(subx, suby)
+        else:
+            self.dataplot.set_data(x, y)
+
+    def getparams(self):
+        params = {}
+        params['visc'] = self.viscspin.GetValue() / 1000 #since input value is in mPa*s
+        params['Rv'] = self.radiusspin.GetValue() # in pixels
+        params['scale'] = self.scalespin.GetValue() # in micrometers per pixel
+        params['fps'] = self.fpsspin.GetValue() # in 1/s
+        
+        params['model'] = self.modelchoice.GetStringSelection()
+        params['low'], params['high'] = self.slider.GetValue()
+        
+        return params
 
 class PoreDebugFrame(wx.Frame):
     """"""
@@ -695,7 +793,7 @@ if __name__ == '__main__':
     elif args.nogui:
         process_image(args.file, args.skip)
     else:    
-        app = wx.PySimpleApp(False)
+        app = wx.App(False)
         frame = TensionsFrame(None, -1, 'Pore Edge Tension', 
                               filename=args.file, skip=args.skip)
         frame.Show()
