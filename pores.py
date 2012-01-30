@@ -622,8 +622,9 @@ class TensionsFrame(wx.Frame):
         lnr = np.log(r)
         lny = np.log(y)
         self.axes.set_ylabel('$\ln (r_{pore})$', size='x-large')
-        
-        Rv = params['scale'] * params['Dv'] / 2 # now Rv in micrometers
+
+        scale = params['scale']        
+        Rv = params['Dv'] * scale / 2 # now Rv in micrometers
         visc = params['visc']
         FPS = params['fps']
         
@@ -639,17 +640,18 @@ class TensionsFrame(wx.Frame):
 
         paramstxt = []
         paramstxt.append('%g FPS'%FPS)
-        paramstxt.append('%g $\\mu$m/px'%params['scale'])
+        paramstxt.append('%g $\\mu$m/px'%scale)
         paramstxt.append('$R_v$=%g $\\mu$m'%Rv)
-        paramstxt.append('$\\nu_s$=%g mPa*s'%(visc*1000))
+        paramstxt.append('$\\eta_s$=%g mPa*s'%(visc*1000))
         paramstxt.append('frames %i to %i'%(np.min(x), np.max(x)))
         
-        title = ', '.join(paramstxt)
-        self.axes.set_title(title, size='medium')
+        self.axes.set_title(', '.join(paramstxt), size='medium')
         
+        fitresults = []
         #since Rv is in micrometers and there is Rv**2, gamma is in picoNewtons
-        fitresult = '$\\gamma$=%g$\\pm$%g pN'%(gamma, gammasterr)
-        self.fittext.set_text(fitresult)
+        fitresults.append('$\\gamma$=%g$\\pm$%g pN'%(gamma, gammasterr))
+        fitresults.append('$max $r_{pore}$ = %g $\\mu$m'%(max(r)*scale))
+        self.fittext.set_text(', '.join(fitresults))
     
     def fitquadratic(self, f, r, x, y, params):
         """Fit fast pore closure after Ryham et al 2011"""
@@ -659,6 +661,7 @@ class TensionsFrame(wx.Frame):
         FPS = params['fps']
         visc = params['visc']
         scale = params['scale']
+        Rv = params['Dv'] * scale / 2 # now Rv in micrometers
         
         self.axes.set_ylabel('$r_{pore}$', size='x-large')
         self.toggle_zoom(f/FPS, r, x/FPS, y)
@@ -674,8 +677,8 @@ class TensionsFrame(wx.Frame):
         gamma = - 0.5 * CMAGIC * visc *scale*scale * FPS / popt[2] # in pN
         gammasterr = np.fabs(pstd[2]*gamma/popt[2])
 
-        nu_m = 1000*0.25 * popt[1] *CMAGIC * visc * scale / popt[2] # in nPa*m*s
-        nu_msterr = 1000*0.25 *CMAGIC * visc * scale * np.sqrt(pstd[1]**2 + 
+        eta_m = 1000*0.25 * popt[1] *CMAGIC * visc * scale / popt[2] # in nPa*m*s
+        eta_msterr = 1000*0.25 *CMAGIC * visc * scale * np.sqrt(pstd[1]**2 + 
                                 (popt[1]*pstd[2]/popt[2])**2) / np.fabs(popt[2])
         
         t_c = popt[0] / FPS
@@ -683,19 +686,20 @@ class TensionsFrame(wx.Frame):
         
         paramstxt = []
         paramstxt.append('%g FPS'%FPS)
-        paramstxt.append('%g $\\mu$m/px'%params['scale'])
-        paramstxt.append('$\\nu_s$=%g mPa*s'%(visc*1000))
+        paramstxt.append('%g $\\mu$m/px'%scale)
+        paramstxt.append('$R_v$=%g $\\mu$m'%Rv)
+        paramstxt.append('$\\eta_s$=%g mPa*s'%(visc*1000))
         paramstxt.append('frames %i to %i'%(np.min(x), np.max(x)))
         
-        title = ', '.join(paramstxt)
-        self.axes.set_title(title, size='medium')
+        self.axes.set_title(', '.join(paramstxt), size='medium')
         
-        fittxt = []
-        fittxt.append('$\\gamma$=%f$\\pm$%f pN'%(gamma, gammasterr))
-        fittxt.append('$\\nu_m$=%g$\\pm$%g nPa*s*m'%(nu_m, nu_msterr))
-        fittxt.append('$t_c$=%g$\\pm$%g s'%(t_c, t_csterr))
-        
-        self.fittext.set_text('\n'.join(fittxt))
+        fitresults = []
+        fitresults.append('$\\gamma$=%f$\\pm$%f pN'%(gamma, gammasterr))
+        fitresults.append('$\\eta_m$=%g$\\pm$%g nPa*s*m'%(eta_m, eta_msterr))
+        fitresults.append('$t_c$=%g$\\pm$%g s'%(t_c, t_csterr))
+        fitresults.append('max $r_{pore}$ = %g $\\mu$m'%(max(r)*scale))
+
+        self.fittext.set_text('\n'.join(fitresults))
     
     def toggle_zoom(self, x, y, subx, suby):
         if self.zoomcb.GetValue():
