@@ -650,7 +650,7 @@ class TensionsFrame(wx.Frame):
         fitresults = []
         #since Rv is in micrometers and there is Rv**2, gamma is in picoNewtons
         fitresults.append('$\\gamma$=%g$\\pm$%g pN'%(gamma, gammasterr))
-        fitresults.append('$max $r_{pore}$ = %g $\\mu$m'%(max(r)*scale))
+        fitresults.append('max $r_{pore}$ = %g $\\mu$m'%(max(r)*scale))
         self.fittext.set_text(', '.join(fitresults))
     
     def fitquadratic(self, f, r, x, y, params):
