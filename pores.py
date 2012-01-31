@@ -3,6 +3,10 @@
 Created on Sun Dec 25 15:15:39 2011
 
 @author: Pavlo Shchelokovskyy
+
+Papers referenced in comments:
+[Ryham et al 2011] Ryham et al, Biophysical Journal 2011(v101)p2929
+[Portet and Dimova 2010] Portet and Dimova, Biophysical Journal 2010(v99)p3264
 """
 #FIXME: "take every" floatspin is not initialized when opening new from text
 #FIXME: zoom is not initialized when opening new from image
@@ -446,7 +450,7 @@ class TensionsFrame(wx.Frame):
 
         labelscale = wx.StaticText(self.paramspanel, -1, 'Scale (um/pixel)')
         self.scalespin = FS.FloatSpin(self.paramspanel, -1, 
-                                       value = 0.3, min_val=0, max_val=200, 
+                                       value = 0.5, min_val=0, max_val=200, 
                                        increment=0.1, digits=4)
         self.Bind(FS.EVT_FLOATSPIN, self.Draw, self.scalespin)
         flexsz.Add(labelscale, 0, wx.GROW|wx.ALIGN_RIGHT|wx.ALIGN_CENTER_VERTICAL)
@@ -462,20 +466,31 @@ class TensionsFrame(wx.Frame):
 
         labelfps = wx.StaticText(self.paramspanel, -1, 'Speed (fps)')
         self.fpsspin = FS.FloatSpin(self.paramspanel, -1, 
-                                    value=1000., min_val=0, max_val=50000, 
+                                    value=5000., min_val=0, max_val=50000, 
                                     increment=1000, digits=3)
         self.Bind(FS.EVT_FLOATSPIN, self.Draw, self.fpsspin)
         flexsz.Add(labelfps, 0, wx.GROW|wx.ALIGN_RIGHT|wx.ALIGN_CENTER_VERTICAL)
         flexsz.Add(self.fpsspin, 1, wx.GROW)
-
+        
+        # default value is for 112 mM glucose in water
         labelvisc = wx.StaticText(self.paramspanel, -1, 'Viscosity (mPa*s)')
         self.viscspin = FS.FloatSpin(self.paramspanel, -1, 
-                                     value=1.0, min_val=0, max_val=2000, 
+                                     value=1.052, min_val=0, max_val=2000,
                                      increment=0.01, digits=3)
         self.Bind(FS.EVT_FLOATSPIN, self.Draw, self.viscspin)
         flexsz.Add(labelvisc, 0, wx.GROW|wx.ALIGN_RIGHT|wx.ALIGN_CENTER_VERTICAL)
         flexsz.Add(self.viscspin, 1, wx.GROW)
-
+        
+        # invaiant constant C appearing in [Ryham et al 2011]
+        # default value is the one estimated in [Ryham et al 2011] for data of [Portet and Dimova 2010]
+        labelfastconst = wx.StaticText(self.paramspanel, -1, 'Fast model constant')
+        self.fastconstspin = FS.FloatSpin(self.paramspanel, -1, 
+                                     value=8.44, min_val=0, max_val=10, 
+                                     increment=0.01, digits=2)
+        self.Bind(FS.EVT_FLOATSPIN, self.Draw, self.fastconstspin)
+        flexsz.Add(labelfastconst, 0, wx.GROW|wx.ALIGN_RIGHT|wx.ALIGN_CENTER_VERTICAL)
+        flexsz.Add(self.fastconstspin, 1, wx.GROW)
+        
         paramsbox.Add(flexsz, 0)
         
         labelmodelchoice = wx.StaticText(self.paramspanel, -1, 'Fitting Model')
@@ -618,7 +633,7 @@ class TensionsFrame(wx.Frame):
         evt.Skip()
 
     def fitlinear(self, f, r, x, y, params):
-        """Fit slow pore closure after Portet and Dimova 2010"""
+        """Fit slow pore closure after [Portet and Dimova 2010]"""
         lnr = np.log(r)
         lny = np.log(y)
         self.axes.set_ylabel('$\ln (r_{pore})$', size='x-large')
@@ -654,9 +669,8 @@ class TensionsFrame(wx.Frame):
         self.fittext.set_text(', '.join(fitresults))
     
     def fitquadratic(self, f, r, x, y, params):
-        """Fit fast pore closure after Ryham et al 2011"""
-        # magic invaiant constant C appearing in the Ryham et al 2011        
-        CMAGIC = 8.44 # their estimate for data from Portet and Domiva 2010
+        """Fit fast pore closure after [Ryham et al 2011]"""
+        fastconst = params['fastconst']
         
         FPS = params['fps']
         visc = params['visc']
@@ -674,11 +688,11 @@ class TensionsFrame(wx.Frame):
         yfit = np.linspace(min(y), max(y), 100)
         self.fitplot.set_data(quad(yfit, *popt)/FPS, yfit)
         
-        gamma = - 0.5 * CMAGIC * visc *scale*scale * FPS / popt[2] # in pN
+        gamma = - 0.5 * fastconst * visc *scale*scale * FPS / popt[2] # in pN
         gammasterr = np.fabs(pstd[2]*gamma/popt[2])
 
-        eta_m = 1000*0.25 * popt[1] *CMAGIC * visc * scale / popt[2] # in nPa*m*s
-        eta_msterr = 1000*0.25 *CMAGIC * visc * scale * np.sqrt(pstd[1]**2 + 
+        eta_m = 1000*0.25 * popt[1] *fastconst * visc * scale / popt[2] # in nPa*m*s
+        eta_msterr = 1000*0.25 *fastconst * visc * scale * np.sqrt(pstd[1]**2 + 
                                 (popt[1]*pstd[2]/popt[2])**2) / np.fabs(popt[2])
         
         t_c = popt[0] / FPS
@@ -687,6 +701,7 @@ class TensionsFrame(wx.Frame):
         paramstxt = []
         paramstxt.append('%g FPS'%FPS)
         paramstxt.append('%g $\\mu$m/px'%scale)
+        paramstxt.append('$C$=%g'%fastconst)
         paramstxt.append('$R_v$=%g $\\mu$m'%Rv)
         paramstxt.append('$\\eta_s$=%g mPa*s'%(visc*1000))
         paramstxt.append('frames %i to %i'%(np.min(x), np.max(x)))
@@ -713,7 +728,7 @@ class TensionsFrame(wx.Frame):
         params['Dv'] = self.diameterspin.GetValue() # in pixels
         params['scale'] = self.scalespin.GetValue() # in micrometers per pixel
         params['fps'] = self.fpsspin.GetValue() # in 1/s
-        
+        params['fastconst'] = self.fastconstspin.GetValue()
         params['model'] = self.modelchoice.GetStringSelection()
         params['low'], params['high'] = self.slider.GetValue()
         
