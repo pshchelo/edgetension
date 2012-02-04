@@ -6,7 +6,12 @@ Written in pretty cross-platform manner, this program allows you to perform calc
 
 Getting the program
 -------------------
-To download the program from GitHub hit the "ZIP" button in the upper left of the page, download the zip-file, unpack it whereever you wont and launch `pores.py` (or, depending on your OS, launch it from command line as `python pores.py`).
+To download the program from GitHub hit the "ZIP" button in the upper left of the page and download the zip-file.
+
+To download the program from Bitucket, search for the `get source >>` link in the upper right of the page, press it and choose the desired type of the archive to download (most probably you want ZIP).
+
+After downloading the archive unpack it whereever you wont and launch `pores.py` (or, depending on your OS, launch it from command line as `python pores.py`).
+
 
 Dependencies
 ------------
