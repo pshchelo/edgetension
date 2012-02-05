@@ -8,7 +8,10 @@ Papers referenced in comments:
 [Ryham et al 2011] Ryham et al, Biophysical Journal 2011(v101)p2929
 [Portet and Dimova 2010] Portet and Dimova, Biophysical Journal 2010(v99)p3264
 """
-#FIXME: zoom is not initialized when opening new from image
+#TODO: progress indicator for image analysis duration
+#FIXME: navbar-zoom is not initialized when opening new from image
+#FIXME: AutoZoom is not working properly after having used navbar's pan and zoom
+#FIXME: doubleslider indicators are not fitted when too big
 from __future__ import division
 import os
 
@@ -51,22 +54,25 @@ def count_tiff_frames(tiffimage):
             count += 1
 
 def load_imagestack(filename):
-    """Loads images from multipage TIFF"""
+    """Loads images from multipage TIFF and counts them"""
     tif = Image.open(filename)
-    size = count_tiff_frames(tif)
-    return tif, size
+    nframes = count_tiff_frames(tif)
+    return tif, nframes
     
 def pores(imagestack, nofimages, njump=1):
-    """Computes pore positions and sizes from binary vesicle images
+    """Computes pore positions and sizes from binary vesicle images.
 
-Images must be adjusted so that the vesicle approximately centered 
-and the pore is in the right half of the image
+    Images must be adjusted so that the vesicle approximately centered 
+    and the pore is in the right half of the image
 
-Input:
-- njump : interval between images that are analysed (i.e. 100 means 
-  pore size is computed for slices 1, 101, 201, 301...)
+    Input:
+    imagestack -- PIL's multipage TIFF image
+    nofimages -- number of frames in the imagestack
+    njump -- analyse every njump'th frame (e.g. 100 means 
+                  pore size is computed for frames 1, 101, 201, 301...),
+                  defaults to 1 (i.e analyse all frames)
 
-"""
+    """
     framenos = np.arange(0, nofimages, njump)
     edgestop = np.empty((len(framenos),2))
     edgesbottom = np.empty_like(edgestop)
@@ -128,6 +134,7 @@ def process_image(filename, nskip):
     """Load image, process it and save results
     
     Used in unattended batch processing mode, UI does not uses this
+    
     """
     tif, nofimg = load_imagestack(filename)
     data = pores(tif, nofimg, njump=nskip)
@@ -136,27 +143,32 @@ def process_image(filename, nskip):
     np.savetxt(nameout, data.T, fmt='%.7e')
     
 def rgba_wx2mplt(wxcolour):
-    """
-    Convert wx.Colour instance to float tuple of rgba values to range in 0-1 used by matplotlib.
-    @param wxcolour: wx.Colour instance
+    """Convert wx.Colour instance of int tuple of rgba values 
+    to range in 0-1 used by matplotlib.
+    
+    wxcolour -- wx.Colour instance
+    
     """
     mpltrgba = []
     wxrgba = wxcolour.Get(includeAlpha=True)
     for item in wxrgba:
-        converted = float(item)/255
+        converted = float(item)/255  # float division here!
         mpltrgba.append(converted)
     return tuple(mpltrgba)
 
 class PlotStatusBar(wx.StatusBar):
+    
     """Status Bar displaying XY coordinates of Matplotlib's axes."""
+    
     def __init__(self, parent):
         wx.StatusBar.__init__(self, parent)
         self.SetFieldsCount(2)
         
     def SetPosition(self, evt):
-        """
-        Set status bar text to current coordinates on the matplotlib plot/subplot
-        @param evt: must be a matplotlib's motion_notify_event
+        """Sets status bar text to current coordinates on the matplotlib plot/subplot
+        
+        evt -- matplotlib's motion_notify_event
+        
         """
         if evt.inaxes:
             x = evt.xdata
@@ -166,10 +178,9 @@ class PlotStatusBar(wx.StatusBar):
 
 class SimpleToolbar(wx.ToolBar):
     def __init__(self, parent, *buttons):
-        """
-        Construct and populate a simple wx.ToolBar 
+        """Construct and populate a simple wx.ToolBar 
         
-        @param buttons: tuple or list of ((Bitmap, shortName, longName, isToggle), Handler)
+        buttons -- tuple or list of ((Bitmap, shortName, longName, isToggle), Handler)
         
         """
         wx.ToolBar.__init__(self, parent)
@@ -180,14 +191,41 @@ class SimpleToolbar(wx.ToolBar):
 
 
 class DoubleSlider(wx.Panel):
+    
+    '''Provides a panel with two sliders
+    
+    Useful for setting minimum and maximum, limits etc.
+    Tryes to replicate the interface of wx.Slider as much as possible.
+    Supports minimal gap between slider values.
+    
     '''
-    Provides a panel with two sliders to visually set 2 values (i.e. minimum and maximum, limits etc)
-    '''
+    
     def __init__(self, parent, id, 
                  value = (1,100), min=1, max=100, gap = None, 
                  pos=wx.DefaultPosition, size=wx.DefaultSize,
                  panelstyle=wx.TAB_TRAVERSAL|wx.NO_BORDER, 
                  style=wx.SL_HORIZONTAL, name=wx.PanelNameStr):
+        """Constructor of the DoubleSlider instance.
+        
+        Arguments:
+        parent -- parent wxPython widget;
+        id -- wx widget ID to assign to this instance;
+        value -- initial values for two sliders, as tuple (dafaults to (1,100));
+        min -- the minimal value for both sliders (defaults to 1);
+        max -- maximal value for both sliders (defaults to 100);
+        gap -- minimal difference between two sliders (defaults to None),
+                  if set to some value sliders will move together to prevent
+                  the diference between them becoming smaller that gap,
+                  if still inside the sliders range, otherwise the sliders will freeze;
+        pos -- wxPython position of the instance (defaults to wx.DefaultPosition);
+        size -- wxPython size of the instance (defaults to wx.DefaultSize);
+        panelstyle -- style to pass to the underlying wx.Panel widget
+                            (defaults to wx.TAB_TRAVERSAL|wx.NO_BORDER);
+        style -- style to pass to underlying wx.Slider widgets
+                    (defaults to wx.SL_HORIZONTAL)
+        name -- name 
+        
+        """
         wx.Panel.__init__(self, parent, id, pos=pos, size=size, style=panelstyle, name=name)
         low, high = value
         self.coupling = False
@@ -208,24 +246,23 @@ class DoubleSlider(wx.Panel):
         self.Fit()
         
     def GetLow(self):
-        """
-        Value of the first(upper or left) slider
-        """
+        """Value of the first(upper or left) slider"""
         return self.lowslider.GetValue()
+    
     def SetLow(self, int):
         return self.lowslider.SetValue(int)
+    
     def GetHigh(self):
-        """
-        Value of the second(lower or right) slider
-        """
+        """Value of the second(lower or right) slider"""
         return self.highslider.GetValue()
+        
     def SetHigh(self, int):
         return self.highslider.SetValue(int)
+    
     def GetValue(self):
-        """
-        Value of both sliders as a tuple
-        """
+        """Value of both sliders as a tuple"""
         return self.GetLow(), self.GetHigh()
+    
     def SetValue(self, value):
         low, high = value
         self.SetLow(low)
@@ -236,26 +273,25 @@ class DoubleSlider(wx.Panel):
     Value = property(GetValue, SetValue)
     
     def GetMin(self):
-        """
-        Minimal value for both sliders
-        """
+        """Minimal value for both sliders"""
         return self.lowslider.GetMin()
+    
     def SetMin(self, int):
         self.lowslider.SetMin(int)
         self.highslider.SetMin(int)
+    
     def GetMax(self):
-        """
-        Maximum value for both sliders
-        """
+        """Maximum value for both sliders"""
         return self.lowslider.GetMax()
+        
     def SetMax(self, int):
         self.lowslider.SetMax(int)
         self.highslider.SetMax(int)
+    
     def GetRange(self):
-        """
-        Range of both sliders as a tuple
-        """
+        """Range of both sliders as a tuple"""
         return self.lowslider.GetRange()
+        
     def SetRange(self, min, max):
         self.lowslider.SetRange(min, max)
         self.highslider.SetRange(min, max)
@@ -265,18 +301,17 @@ class DoubleSlider(wx.Panel):
     Range = property(GetRange, SetRange)
         
     def GetLineSize(self):
-        """
-        The amount of thumb movement when pressing arrow buttons
-        """
+        """The amount of thumb movement when pressing arrow buttons"""
         return self.lowslider.GetLineSize()
+        
     def SetLineSize(self, int):
         self.lowslider.SetLineSize(int)
         self.highslider.SetLineSize(int)
+    
     def GetPageSize(self):
-        """
-        The amount of thumb movement when pressing Page Up/Down buttons
-        """
+        """The amount of thumb movement when pressing Page Up/Down buttons"""
         return self.lowslider.GetPageSize()
+        
     def SetPageSize(self, int):
         self.lowslider.SetPageSize(int)
         self.highslider.SetPageSize(int)
@@ -304,6 +339,7 @@ class DoubleSlider(wx.Panel):
     
     def GetCoupling(self):
         return self.coupling
+    
     def SetCoupling(self, state):
         self.coupling = state
     
@@ -312,6 +348,7 @@ class DoubleSlider(wx.Panel):
             return self.gap
         else:
             return None
+    
     def SetGap(self, gap):
         self.gap = gap
 
@@ -327,7 +364,7 @@ class DoubleSlider(wx.Panel):
 
 
 class TensionsFrame(wx.Frame):
-    """Main window
+    """Main window.
     
     Displays plot, fitted data and results of the fit,
     plus all the relevant analysis parameters and fitting settings.
@@ -391,8 +428,8 @@ class TensionsFrame(wx.Frame):
                                       )
         self.axes.set_xlabel('time, s', size='large')
 
-        navtoolbar = NavigationToolbar2(self.canvas)
-        navtoolbar.Realize()
+        self.navtoolbar = NavigationToolbar2(self.canvas)
+        self.navtoolbar.Realize()
         
         dim = self.data.shape[1]
         if dim == 1:
@@ -405,13 +442,13 @@ class TensionsFrame(wx.Frame):
                                        style=wx.ALIGN_CENTER|wx.ST_NO_AUTORESIZE)
 
         self.imgbox = wx.BoxSizer(wx.VERTICAL)
+        self.imgbox.Add(self.navtoolbar, 0, wx.GROW)
         self.imgbox.Add(self.canvas, 1, wx.GROW)
-        self.imgbox.Add(navtoolbar, 0, wx.GROW)
-
+        
         labelbox = wx.BoxSizer(wx.VERTICAL)
         labelbox.Add(self.lowlabel, 1, wx.GROW)
         labelbox.Add(self.highlabel, 1, wx.GROW)
-#FIXME: doubleslider indicators are not fitted when too big
+
         sliderbox = wx.BoxSizer(wx.HORIZONTAL)
         sliderbox.Add(labelbox, 0, wx.GROW)
         sliderbox.Add(self.slider, 1, wx.GROW)
@@ -662,11 +699,9 @@ class TensionsFrame(wx.Frame):
         y = r[ind]
 
         model(f, r, x, y, params)
-        
-#        self.axes.legend()
 
         self.axes.relim()
-        self.axes.autoscale_view(tight=False)
+        self.axes.autoscale_view(tight=True)
 
         self.canvas.draw()
         evt.Skip()
@@ -705,7 +740,7 @@ class TensionsFrame(wx.Frame):
         #since Rv is in micrometers and there is Rv**2, gamma is in picoNewtons
         fitresults.append('$\\gamma$=%g$\\pm$%g pN'%(gamma, gammasterr))
         fitresults.append('max $r_{pore}$ = %g $\\mu$m'%(max(r)*scale))
-        self.fittext.set_text(', '.join(fitresults))
+        self.fittext.set_text('\n'.join(fitresults))
     
     def fitquadratic(self, f, r, x, y, params):
         """Fit fast pore closure after [Ryham et al 2011]"""
@@ -761,6 +796,9 @@ class TensionsFrame(wx.Frame):
             self.dataplot.set_data(subx, suby)
         else:
             self.dataplot.set_data(x, y)
+        self.navtoolbar.home()
+        ## self.navtoolbar.update()
+        self.navtoolbar.draw()
 
     def getparams(self):
         """Collects relevant for analisys parameters from UI"""
