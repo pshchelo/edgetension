@@ -8,7 +8,6 @@ Papers referenced in comments:
 [Ryham et al 2011] Ryham et al, Biophysical Journal 2011(v101)p2929
 [Portet and Dimova 2010] Portet and Dimova, Biophysical Journal 2010(v99)p3264
 """
-#FIXME: "take every" floatspin is not initialized when opening new from text
 #FIXME: zoom is not initialized when opening new from image
 from __future__ import division
 import os
@@ -33,6 +32,12 @@ from matplotlib.figure import Figure
 
 DATWILDCARD = "Data files (TXT, CSV, DAT)|*.txt;*.TXT;*.csv;*.CSV;*.dat;*.DAT | All files (*.*)|*.*"
 IMGWILDCARD = "TIFF files (TIF, TIFF)|*.tif;*.TIF;*.tiff;*.TIFF | All files (*.*)|*.*"
+
+TXT = 0
+IMG = 1
+MODES = {}
+MODES[TXT] = 'TXT'
+MODES[IMG] = 'IMG'
 
 def count_tiff_frames(tiffimage):
     """Counts frames in a multipage TIFF file"""
@@ -120,7 +125,10 @@ Input:
     return np.column_stack((poreradii, edgestop, edgesbottom, framenos+1)).T
     
 def process_image(filename, nskip):
-    """Load image, process it and save results"""
+    """Load image, process it and save results
+    
+    Used in unattended batch processing mode, UI does not uses this
+    """
     tif, nofimg = load_imagestack(filename)
     data = pores(tif, nofimg, njump=nskip)
     name, ext = os.path.splitext(filename)
@@ -140,7 +148,7 @@ def rgba_wx2mplt(wxcolour):
     return tuple(mpltrgba)
 
 class PlotStatusBar(wx.StatusBar):
-    '''Status Bar for wxPython VAMP frontend'''
+    """Status Bar displaying XY coordinates of Matplotlib's axes."""
     def __init__(self, parent):
         wx.StatusBar.__init__(self, parent)
         self.SetFieldsCount(2)
@@ -319,9 +327,15 @@ class DoubleSlider(wx.Panel):
 
 
 class TensionsFrame(wx.Frame):
+    """Main window
+    
+    Displays plot, fitted data and results of the fit,
+    plus all the relevant analysis parameters and fitting settings.
+    """
     def __init__(self, parent, id, title, filename=None, skip=1):
         wx.Frame.__init__(self, parent, id, title=title)
-
+        
+        self.mode = None
         self.basetitle = title
         self.data = np.zeros((6,1))
         self.image = None
@@ -358,6 +372,7 @@ class TensionsFrame(wx.Frame):
             self.open_images(wx.PyCommandEvent(wx.EVT_BUTTON.typeId, self.GetId()))
 
     def MakeImagePanel(self):
+        """Creates plot with navbar and doubleslider."""
         self.figure = Figure(facecolor = rgba_wx2mplt(self.panel.GetBackgroundColour()))
         self.canvas = FigureCanvas(self.panel, -1, self.figure)
         self.canvas.mpl_connect('motion_notify_event', self.statusbar.SetPosition)
@@ -404,12 +419,14 @@ class TensionsFrame(wx.Frame):
         self.imgbox.Add(sliderbox, 0, wx.GROW)
 
     def SetFrameIcons(self, artid, sizes):
+        """Sets icon bundle for frame icons"""
         ib = wx.IconBundle()
         for size in sizes:
             ib.AddIcon(wx.ArtProvider.GetIcon(artid, size = (size,size)))
         self.SetIcons(ib)
 
     def ToolbarData(self):
+        """Creates data to produce a toolbar"""
         bmpsavetxt = wx.ArtProvider.GetBitmap(wx.ART_FILE_SAVE, wx.ART_TOOLBAR, (16,16))
         bmpopentxt = wx.ArtProvider.GetBitmap(wx.ART_FILE_OPEN, wx.ART_TOOLBAR, (16,16))
         bmpopenimg = wx.ArtProvider.GetBitmap(wx.ART_NEW, wx.ART_TOOLBAR, (16,16))
@@ -426,6 +443,7 @@ class TensionsFrame(wx.Frame):
                 )
 
     def MakeParamsPanel(self):
+        """Creates panel with analysis parameters and sets their default values"""
         dim = self.data.shape[1]
         if dim == 1:
             dim = 2
@@ -505,7 +523,7 @@ class TensionsFrame(wx.Frame):
         self.paramspanel.SetSizer(paramsbox)
 
     def OnSaveTxt(self, evt):
-        
+        """Handler for opening save file dialog"""
         savedlg = wx.FileDialog(self, 'Save pore data', '',
                             'pores.txt', wildcard = DATWILDCARD,
                             style=wx.FD_SAVE|wx.FD_OVERWRITE_PROMPT)
@@ -514,13 +532,19 @@ class TensionsFrame(wx.Frame):
             return
         datname = savedlg.GetPath()
         savedlg.Destroy()
-        header = '#pore radius (pixel)\ty_top\tx_top\ty_bottom\tx_bottom\tframe No\n'
+        self.save_txt(datname)
+        self.datapath = datname
+        evt.Skip()
+        
+    def save_txt(self, path):
+        """Saves data file to given path"""
+        header = '#poreRadius_px\ty_top\tx_top\ty_bottom\tx_bottom\tframeNo\n'
         with open(datname, 'w') as fout:
             fout.write(header)
             np.savetxt(fout, self.data.T, fmt='%g')
-        evt.Skip()
 
     def OnOpenTxt(self, evt):
+        """Handler for opening open text file dialog"""
         fileDlg = wx.FileDialog(self, message='Choose Pore Radius file...',
                                  wildcard=DATWILDCARD, style=wx.FD_OPEN)
         if fileDlg.ShowModal() != wx.ID_OK:
@@ -528,29 +552,10 @@ class TensionsFrame(wx.Frame):
             return
         self.datapath = fileDlg.GetPath()
         fileDlg.Destroy()
-        try:
-            self.data = np.loadtxt(self.datapath, unpack=1)
-        except Exception, e:
-            self.OnError(str(e))
-            evt.Skip()
-            return
-        self.image = None
-        self.imagepath = ''
-        self.nofimg = 0
-        self.init_new_data()
-        self.SetTitle('%s - %s'%(self.datapath, self.basetitle))
-        self.Draw(evt)
-        evt.Skip()
-    
-    def init_new_data(self):
-        maxframe = int(max(self.data[5]))
-        minframe = int(min(self.data[5]))
-        self.slider.SetMax(maxframe)
-        self.slider.SetHigh(maxframe)
-        self.slider.SetMin(minframe)
-        self.slider.SetLow(minframe)
+        self.open_txt(evt)
         
     def OnOpenImg(self, evt):
+        """Handler for opening open image dialog"""
         fileDlg = wx.FileDialog(self, message='Choose Pore Image file...',
                                  wildcard=IMGWILDCARD, style=wx.FD_OPEN)
         if fileDlg.ShowModal() != wx.ID_OK:
@@ -559,34 +564,68 @@ class TensionsFrame(wx.Frame):
         self.imagepath = fileDlg.GetPath()
         fileDlg.Destroy()
         self.open_images(evt)
-        
-    def open_images(self, evt):        
+     
+    def open_txt(self, evt):
+        """Opens text file with data"""
+        try:
+            self.data = np.loadtxt(self.datapath, unpack=1)
+        except Exception, e:
+            self.OnError(str(e))
+            evt.Skip()
+            return
+        self.mode = TXT
+        self.imagepath = ''
+        self.SetTitle('%s - %s'%(self.datapath, self.basetitle))
+        self.OnNewData(evt)
+    
+    def open_images(self, evt):
+        """Opens image file foe analysis"""
         try:
             self.image, self.nofimg = load_imagestack(self.imagepath)
         except Exception, e:
             self.OnError('Not an appropriate image: %s'%e)
+            evt.Skip()
             return
-        self.data = np.zeros((6,1))
+        self.mode = IMG
         self.datapath = ''
         self.SetTitle('%s - %s'%(self.imagepath, self.basetitle))
-        self.skipspin.SetRange(1, self.nofimg)
-        self.skipspin.SetValue(self.skip)
         self.OnNewData(evt)
+    
+    def OnNewData(self, evt):
+        """Initializes interface after opening image of text data file"""
+        # Everything here is quite undefined if played on the maximum limit of skip's
+        skip = self.skipspin.GetValue()
+        if self.mode == IMG:
+            self.data = pores(self.image, self.nofimg, skip)
+            self.dataview = self.data
+            l = self.nofimg
+        else:
+            cond = np.arange(self.data.shape[1])%skip == 0
+            self.dataview = self.data[:,cond]
+            l = self.data.shape[1]
+            
+        self.skipspin.SetRange(1, l)
+        if skip > l:
+            self.skipspin.SetValue(l)
+        
+        maxframe = int(max(self.data[5]))
+        minframe = int(min(self.data[5]))
+        self.slider.SetMax(maxframe)
+        self.slider.SetHigh(maxframe)
+        self.slider.SetMin(minframe)
+        self.slider.SetLow(minframe)
+        self.Draw(evt)
         
     def OnDebug(self, evt):
+        """Handler of opening debug window event"""
         debugwindow = PoreDebugFrame(self, -1, self.data, images=self.image, 
                                      datpath=self.datapath, imgpath=self.imagepath)
         debugwindow.Show()
-    
-    def OnNewData(self, evt):
-        if self.image:
-            self.data = pores(self.image, self.nofimg, self.skipspin.GetValue())
-            self.init_new_data()
-            self.Draw(evt)
         
     def OnError(self, msg):
-        """
-        Display an error dialog
+        """Handler for error messages.
+        
+        Displays an error dialog
         @param msg: error message to display (type = string)
         """
         errDlg = wx.MessageDialog(self, msg, "Error!", wx.ICON_ERROR)
@@ -615,8 +654,8 @@ class TensionsFrame(wx.Frame):
         self.lowvline.set_xdata(low/FPS)
         self.upvline.set_xdata(high/FPS)
         
-        r = self.data[0]
-        f = self.data[5]
+        r = self.dataview[0]
+        f = self.dataview[5]
         
         ind = np.nonzero(np.logical_and(f >= low, f <= high))
         x = f[ind]
@@ -717,12 +756,14 @@ class TensionsFrame(wx.Frame):
         self.fittext.set_text('\n'.join(fitresults))
     
     def toggle_zoom(self, x, y, subx, suby):
+        """Toggles data plot rescale parameters to imitate dynamic zoom"""
         if self.zoomcb.GetValue():
             self.dataplot.set_data(subx, suby)
         else:
             self.dataplot.set_data(x, y)
 
     def getparams(self):
+        """Collects relevant for analisys parameters from UI"""
         params = {}
         params['visc'] = self.viscspin.GetValue() / 1000 #since input value is in mPa*s
         params['Dv'] = self.diameterspin.GetValue() # in pixels
@@ -735,7 +776,7 @@ class TensionsFrame(wx.Frame):
         return params
 
 class PoreDebugFrame(wx.Frame):
-    """"""
+    """Frame displaying image overlayed with found pore edges"""
     def __init__(self, parent, id, data, images=None, datpath='', imgpath=''):
         """"""
         wx.Frame.__init__(self, parent, id)
@@ -789,6 +830,10 @@ class PoreDebugFrame(wx.Frame):
         self.OnSlide(wx.EVT_SLIDER)
         
     def OnSlide(self, evt):
+        """Handler of slider events.
+        
+        Redraws the plot depending on slider position.
+        """
         self.axes.clear()
         index = self.frameslider.GetValue()
         r, y1, x1, y2, x2, frame = self.data[:,index]
