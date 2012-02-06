@@ -576,7 +576,7 @@ class TensionsFrame(wx.Frame):
     def save_txt(self, path):
         """Saves data file to given path"""
         header = '#poreRadius_px\ty_top\tx_top\ty_bottom\tx_bottom\tframeNo\n'
-        with open(datname, 'w') as fout:
+        with open(path, 'w') as fout:
             fout.write(header)
             np.savetxt(fout, self.data.T, fmt='%g')
 
@@ -878,7 +878,8 @@ class PoreDebugFrame(wx.Frame):
         self.images.seek(frame-1)
         self.axes.plot((x1, x2),(y1,y2),'yo-', lw=3, ms=5, alpha=0.75)
         #TODO: make clear on what happens with flipping of the image
-        self.axes.imshow(self.images.transpose(Image.FLIP_TOP_BOTTOM), aspect='equal', cmap='gray')
+        self.axes.imshow(self.images.transpose(Image.FLIP_TOP_BOTTOM), 
+                         aspect='equal', cmap='gray', interpolation="none")
         title = 'frame %i, Rpore = %g px'%(frame, r)
         self.axes.set_title(title)
         self.canvas.draw()
