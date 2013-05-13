@@ -1,8 +1,9 @@
+========================
 Pore Tension Calculation
 ========================
-:Info: https://bitbucket.org/pshchelo/edgetension
+:Info: http:/sites.google.com/shchelokovskyy
 :Author: Pavlo Shchelokovskyy <shchelokovskyy@gmail.com>
-:Description: use Docutils (and rst2pdf) to convert to HTML, PDF or other formats.
+:Description: use Docutils or http://rst2a.com to convert to HTML, PDF or other formats.
 
 What's this about
 -----------------
@@ -29,7 +30,7 @@ Images must be transferred from the camera in tiff format.
 Acquisition must be performed with a linear timescale. Images related to an 
 experiment (i.e. to the application of one pulse on one vesicle) must be saved 
 as an image stack in tiff format. The user must ensure that the cathode-facing 
-hemisphere (where the pore appears) of the vesicle is situated on the right-hand side of the images. 
+hemisphere (wher the pore appears) of the vesicle is situated on the right-hand side of the images. 
 Converting images to a stack and rotating them if necessary can be performed with ImageJ.
 
 Image processing with ImageJ for membrane detection
@@ -62,7 +63,7 @@ and menus for most used tools and functions when preparing images of
 poration experiments to help you minimize deep ImageJ submenu navigation. 
 It also includes button providing the same macros T.Portet has included before,
 so you do not need to install it anymore. Since the icons on tools might 
-be somewhat cryptic, pay attention to the ImageJ tooltips for these buttons, 
+be somewht cryptic, pay attention to the ImageJ tooltips for these buttons, 
 they show what the buttons mean.
 
 In some cases, we have to remove residual white pixels appearing inside the 
@@ -109,7 +110,7 @@ pores.py
     optional arguments:
       -h, --help            show this help message and exit
       --file FILE, -f FILE  Name of the multipage b/w tiff file to process
-      --skip SKIP, -s SKIP  Analyze only every SKIPth frame (default is every
+      --skip SKIP, -s SKIP  Analyse only every SKIPth frame (default is every
                             frame)
       --test TEST, -t TEST  Run the procedure TEST times and report the minimal of
                             them
@@ -129,16 +130,17 @@ Toolbar has the following buttons:
 
 - Open image file - opens and immediately analyses the image with settings 
   found on parameters panel.
-- Open pores data file - opens a text data file previously saved by pores.py
+- Open pores data file - opens a text data file previousely saved by pores.py 
+  or wxpores.py
 - Save pores data file - saves a text data file for later reference/analysis, 
-  compatible with files saved by pores.py and old MATLAB procedure.
+  coompatible with files saved by pores.py and old MATLAB procedure.
 - Show found pores - opens an extra window where position of pore edges found
-  is visualized overlayed on image being analyzed.
+  is visualized overlayed on image being analysed.
 
 Parameters panel can set following parameters:
 
 - Take every - take every n-th frame for calculations. 1 means all frames 
-  are analyzed, 2 means every other frame and so on.
+  are analysed, 2 means every other frame and so on.
 - Radius - radius of the vesicle after poration in micrometers. Currently clipped 
   at 200 micrometers, which is a quite unrealistically huge vesicle.
 - Speed - speed of image acquisition in frames per second. Currently clipped 
@@ -155,11 +157,11 @@ With the plot toolbar (below the plot) you can pan and zoom the plot,
 revert to original pan and zoom settings and save the image in variety of formats, 
 both vector and raster.
 
-To analyze an image prepared as described in section on image processing, 
+To analyse an image prepared as described in section on image processing, 
 open it by pressing "Open Image" button and choosing the image. The image will be
-immediately analyzed (no visual clues for now, so it might look like the program 
+immediately analysed (no visual clues for now, so it might look like the program 
 hangs), taking parameters as set on Parameters panel. You could also open 
-a previously saved data file. 
+a previousely saved data file. 
 
 In both cases you will be presented with the plot of ln(Rp) vs time. 
 First, adjust the parameters on the Parameters panel to the desired values. 
@@ -230,7 +232,7 @@ on the right side (see section on image processing).
    (these most likely are on those squares put onto images as described in the 
    section on image processing).
 #. Find continuous clusters those innermost points belong to. Continuous means 
-   that every point of the cluster has at least one nearest neighbor 
+   that every point of the cluster has at least one nearest neighbour 
    in any of 8 directions.
 #. Find the (signed) angles between the center of image, 
    positive x-direction (right) and each point of the clusters.
@@ -239,3 +241,4 @@ on the right side (see section on image processing).
 #. For nonzero elements in lower-right quadrant take element and its position 
    with the maximal angle.
 #. Find distance between these two points, filtering out possible overlapping cases.
+

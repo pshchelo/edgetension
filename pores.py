@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
 Created on Sun Dec 25 15:15:39 2011
@@ -665,7 +666,7 @@ class TensionsFrame(wx.Frame):
         Displays an error dialog
         @param msg: error message to display (type = string)
         """
-        errDlg = wx.MessageDialog(self, msg, "Error!", wx.ICON_ERROR)
+        errDlg = wx.MessageDialog(self, msg, "Error!", wx.OK|wx.ICON_ERROR)
         errDlg.ShowModal()
         errDlg.Destroy()
 
@@ -701,7 +702,7 @@ class TensionsFrame(wx.Frame):
         model(f, r, x, y, params)
 
         self.axes.relim()
-        self.axes.autoscale_view(tight=True)
+        self.axes.autoscale_view(tight=False)
 
         self.canvas.draw()
         evt.Skip()
